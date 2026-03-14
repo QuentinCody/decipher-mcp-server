@@ -1,7 +1,8 @@
 /**
  * DecipherDataDO — Durable Object for staging large DECIPHER responses.
  *
- * Extends RestStagingDO with patient, CNV, and syndrome-specific schema hints.
+ * Extends RestStagingDO with schema hints matching the actual internal
+ * /data/ API response structures from deciphergenomics.org.
  */
 
 import { RestStagingDO } from "@bio-mcp/shared/staging/rest-staging-do";
@@ -11,95 +12,108 @@ export class DecipherDataDO extends RestStagingDO {
 	protected getSchemaHints(data: unknown): SchemaHints | undefined {
 		if (!data || typeof data !== "object") return undefined;
 
-		// Array of patient records
+		const obj = data as Record<string, unknown>;
+
+		// /data/syndromes → { content: { "1": { syndrome_id, name, Variants }, "2": ... } }
+		if (obj.content && typeof obj.content === "object" && !Array.isArray(obj.content)) {
+			const contentObj = obj.content as Record<string, unknown>;
+			const keys = Object.keys(contentObj);
+			if (keys.length > 0) {
+				const sample = contentObj[keys[0]] as Record<string, unknown> | undefined;
+				if (sample && typeof sample === "object") {
+					// Syndrome list entries
+					if ("syndrome_id" in sample && "name" in sample) {
+						return {
+							tableName: "syndromes",
+							indexes: ["syndrome_id", "name", "grade"],
+						};
+					}
+
+					// Patient variant response: { content: { Variants: {...}, ... } }
+					if ("Variants" in sample || "variant_class" in sample) {
+						return {
+							tableName: "variants",
+							indexes: ["chr", "start", "end", "variant_class", "pathogenicity"],
+						};
+					}
+				}
+			}
+		}
+
+		// /data/patient/{id}/phenotypes → { Phenotypes: [...], HPOGraphPath: [...] }
+		if (Array.isArray(obj.Phenotypes)) {
+			return {
+				tableName: "phenotypes",
+				indexes: ["hpo_term_id", "person_id", "is_present"],
+			};
+		}
+
+		// /data/patient/{id}/variants → { content: { Variants: {...}, ... } }
+		if (obj.content && typeof obj.content === "object") {
+			const content = obj.content as Record<string, unknown>;
+			if (content.Variants || content.VariantDosageSensitivity) {
+				return {
+					tableName: "variants",
+					indexes: ["chr", "start", "end", "variant_class"],
+				};
+			}
+		}
+
+		// /data/gene/{symbol} → large gene object with many nested fields
+		if (
+			obj.ensembl_gene_ensg &&
+			obj.ensembl_hgnc_symbol &&
+			("hi_score" in obj || "p_li" in obj)
+		) {
+			return {
+				tableName: "genes",
+				indexes: ["ensembl_hgnc_symbol", "chr", "hi_score", "p_li"],
+			};
+		}
+
+		// /data/gene/{symbol}/g2p → { content: { g2p: [...] } }
+		if (obj.content && typeof obj.content === "object") {
+			const content = obj.content as Record<string, unknown>;
+			if (Array.isArray(content.g2p)) {
+				return {
+					tableName: "g2p_associations",
+					indexes: ["hgnc_symbol", "disease_name", "confidence", "allelic_requirement"],
+				};
+			}
+		}
+
+		// /data/syndrome/{id} → single syndrome with Genes array
+		if (obj.syndrome_id && obj.name && (obj.Genes || obj.Variants)) {
+			return {
+				tableName: "syndrome_detail",
+				indexes: ["syndrome_id", "name"],
+				flatten: { Genes: 1, Variants: 1 },
+			};
+		}
+
+		// Array fallback — check first element
 		if (Array.isArray(data)) {
 			const sample = data[0];
 			if (!sample || typeof sample !== "object") return undefined;
 
-			// Patient records — have phenotypes and/or CNVs
-			if ("patient_id" in sample || ("sex" in sample && "phenotypes" in sample)) {
-				return {
-					tableName: "patients",
-					indexes: ["patient_id", "sex", "phenotypes"],
-					flatten: { cnvs: 1, phenotypes: 1 },
-				};
-			}
-
-			// CNV records — have chr, start, end, mean_ratio
-			if ("chr" in sample && "start" in sample && "end" in sample) {
-				return {
-					tableName: "cnvs",
-					indexes: ["chr", "start", "end", "type", "pathogenicity"],
-				};
-			}
-
-			// Syndrome records — have name and genomic coordinates
-			if ("syndrome_name" in sample || ("name" in sample && "chr" in sample)) {
+			if ("syndrome_id" in sample) {
 				return {
 					tableName: "syndromes",
-					indexes: ["name", "chr", "syndrome_id"],
+					indexes: ["syndrome_id", "name", "grade"],
 				};
 			}
-
-			// HI/TS prediction records
-			if ("hi_score" in sample || "ts_score" in sample || "haploinsufficiency" in sample) {
+			if ("hpo_term_id" in sample) {
 				return {
-					tableName: "predictions",
-					indexes: ["gene", "hi_score", "ts_score"],
+					tableName: "phenotypes",
+					indexes: ["hpo_term_id", "person_id", "is_present"],
 				};
 			}
-
-			// Population CNV records
-			if ("population_cnv_id" in sample || "frequency" in sample) {
+			if ("ensembl_gene_ensg" in sample || "ensembl_hgnc_symbol" in sample) {
 				return {
-					tableName: "population_cnvs",
-					indexes: ["chr", "start", "end", "frequency"],
+					tableName: "genes",
+					indexes: ["ensembl_hgnc_symbol", "chr", "hi_score"],
 				};
 			}
-		}
-
-		// Wrapped responses (e.g. { results: [...] })
-		const obj = data as Record<string, unknown>;
-
-		if (Array.isArray(obj.results)) {
-			const sample = obj.results[0];
-			if (sample && typeof sample === "object") {
-				if ("patient_id" in sample || ("sex" in sample && "phenotypes" in sample)) {
-					return {
-						tableName: "patients",
-						indexes: ["patient_id", "sex", "phenotypes"],
-						flatten: { cnvs: 1, phenotypes: 1 },
-					};
-				}
-				if ("chr" in sample && "start" in sample && "end" in sample) {
-					return {
-						tableName: "cnvs",
-						indexes: ["chr", "start", "end", "type", "pathogenicity"],
-					};
-				}
-			}
-		}
-
-		if (Array.isArray(obj.patients)) {
-			return {
-				tableName: "patients",
-				indexes: ["patient_id", "sex", "phenotypes"],
-				flatten: { cnvs: 1, phenotypes: 1 },
-			};
-		}
-
-		if (Array.isArray(obj.cnvs)) {
-			return {
-				tableName: "cnvs",
-				indexes: ["chr", "start", "end", "type", "pathogenicity"],
-			};
-		}
-
-		if (Array.isArray(obj.syndromes)) {
-			return {
-				tableName: "syndromes",
-				indexes: ["name", "chr", "syndrome_id"],
-			};
 		}
 
 		return undefined;

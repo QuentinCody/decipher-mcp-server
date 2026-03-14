@@ -3,6 +3,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerQueryData } from "./tools/query-data";
 import { registerGetSchema } from "./tools/get-schema";
 import { registerCodeMode } from "./tools/code-mode";
+import { registerGeneLookup } from "./tools/gene-lookup";
+import { registerSyndromes } from "./tools/syndromes";
+import { registerPatient } from "./tools/patient";
 import { DecipherDataDO } from "./do";
 
 // Export Durable Object classes
@@ -16,13 +19,22 @@ interface DecipherEnv {
 export class MyMCP extends McpAgent {
     server: any = new McpServer({
         name: "decipher",
-        version: "0.1.0",
+        version: "0.2.0",
     });
 
     async init() {
         const env = this.env as unknown as DecipherEnv;
+
+        // Hand-built direct tools
+        registerGeneLookup(this.server, env);
+        registerSyndromes(this.server, env);
+        registerPatient(this.server, env);
+
+        // Staging tools
         registerQueryData(this.server, env);
         registerGetSchema(this.server, env);
+
+        // Code Mode tools (search catalog + V8 isolate execute)
         registerCodeMode(this.server, env);
     }
 }

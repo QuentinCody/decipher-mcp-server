@@ -1,70 +1,69 @@
 /**
- * DECIPHER open-access API catalog — hand-built from
- * https://www.deciphergenomics.org/ddd/openaccess/api documentation.
+ * DECIPHER internal data API catalog — reverse-engineered from the
+ * deciphergenomics.org Nuxt.js frontend's /data/ endpoints.
  *
- * Covers patient CNVs, syndromes, HI/TS predictions, and population CNV data.
+ * IMPORTANT: DECIPHER does NOT have a documented public REST API.
+ * The original "open-access API" at /ddd/openaccess/api does NOT exist.
+ * These endpoints are the internal data layer used by the Nuxt SSR frontend.
+ * They return JSON and are accessible without authentication for open-access data,
+ * but they are undocumented and may change without notice.
+ *
  * DECIPHER (Database of Chromosomal Imbalance and Phenotype in Humans Using
- * Ensembl Resources) provides open-access genomic variant data for rare disease
- * research.
+ * Ensembl Resources) provides genomic variant and clinical phenotype data
+ * for rare disease research.
+ *
+ * Verified working endpoints (March 2026):
+ *   /data/patient/{id}, /data/patient/{id}/phenotypes, /data/patient/{id}/variants,
+ *   /data/gene/{symbol}, /data/gene/{symbol}/g2p,
+ *   /data/syndromes, /data/syndrome/{id}
  */
 
 import type { ApiCatalog } from "@bio-mcp/shared/codemode/catalog";
 
 export const decipherCatalog: ApiCatalog = {
-	name: "DECIPHER Open Access",
-	baseUrl: "https://www.deciphergenomics.org/ddd/openaccess/api",
-	version: "1.0",
+	name: "DECIPHER Internal Data",
+	baseUrl: "https://www.deciphergenomics.org",
+	version: "undocumented",
 	auth: "none",
-	endpointCount: 14,
+	endpointCount: 7,
 	notes:
-		"- DECIPHER uses GRCh37/hg19 coordinates (NOT GRCh38) — convert coordinates if needed\n" +
-		"- CNV types: deletion, duplication, insertion\n" +
-		"- Pathogenicity classes: pathogenic, likely_pathogenic, uncertain, likely_benign, benign\n" +
-		"- Phenotypes use HPO (Human Phenotype Ontology) terms (e.g. HP:0001250 for seizures)\n" +
-		"- Patient data is open-access consented subset only — not all DECIPHER patients are included\n" +
-		"- Chromosomal coordinates use 'chr' as string (e.g. '1', '2', ..., 'X', 'Y')\n" +
-		"- Large result sets may be paginated — check for 'next' or 'offset' in responses\n" +
-		"- No authentication required — all endpoints are publicly accessible",
+		"- DECIPHER does NOT have a documented public REST API — these are internal Nuxt.js data endpoints\n" +
+		"- All endpoints are under /data/ and return JSON without authentication for open-access data\n" +
+		"- These endpoints may change without notice — they are not officially supported\n" +
+		"- Gene data uses GRCh38 coordinates; syndromes may have GRCh37 alternative_positions\n" +
+		"- Patient IDs are numeric (e.g. 255882); only open-access consented patients are accessible\n" +
+		"- Gene lookups use HGNC symbols (e.g. BRCA1, TP53)\n" +
+		"- Syndrome IDs are numeric (e.g. 1 = Wolf-Hirschhorn, 14 = Prader-Willi Type 1)\n" +
+		"- Gene endpoint includes HI/TS scores, pLI, LOEUF, constraint metrics, OMIM diseases, G2P, GenCC\n" +
+		"- Phenotypes use HPO (Human Phenotype Ontology) term IDs (e.g. HP:0001250)\n" +
+		"- Patient variant data includes CNV coordinates, mean_ratio, dosage sensitivity scores\n" +
+		"- There is NO search endpoint — you must know the patient ID, gene symbol, or syndrome ID\n" +
+		"- For bulk data access, DECIPHER provides file downloads at /about/downloads/data (not via API)",
 	endpoints: [
 		// === Patient ===
 		{
 			method: "GET",
-			path: "/patients",
-			summary: "List open-access patients with their CNVs and phenotypes",
+			path: "/data/patient/{id}",
+			summary:
+				"Get open-access patient details including demographics (age, sex), family members, " +
+				"project info, and counts of genotypes, phenotypes, and assessments. " +
+				"Only open-access consented patients are accessible without login.",
 			category: "patient",
-			queryParams: [
+			pathParams: [
 				{
-					name: "has_phenotype",
-					type: "boolean",
-					required: false,
-					description: "Filter to patients with phenotype data",
-				},
-				{
-					name: "sex",
+					name: "id",
 					type: "string",
-					required: false,
-					description: "Filter by sex",
-					enum: ["male", "female", "unknown"],
-				},
-				{
-					name: "limit",
-					type: "number",
-					required: false,
-					description: "Max number of patients to return (default: 100)",
-				},
-				{
-					name: "offset",
-					type: "number",
-					required: false,
-					description: "Offset for pagination (0-based)",
+					required: true,
+					description: "DECIPHER patient ID (numeric, e.g. 255882)",
 				},
 			],
 		},
 		{
 			method: "GET",
-			path: "/patients/{id}",
+			path: "/data/patient/{id}/phenotypes",
 			summary:
-				"Get a specific patient by DECIPHER ID, including their CNVs, phenotypes, and inheritance",
+				"Get all HPO phenotypes for a specific open-access patient. Returns phenotype records " +
+				"with HPO term IDs, presence status, and HPO graph path mappings to top-level categories.",
 			category: "patient",
 			pathParams: [
 				{
@@ -77,117 +76,58 @@ export const decipherCatalog: ApiCatalog = {
 		},
 		{
 			method: "GET",
-			path: "/patients/{id}/cnvs",
-			summary: "Get all CNVs for a specific patient",
+			path: "/data/patient/{id}/variants",
+			summary:
+				"Get all variants (primarily CNVs) for a specific open-access patient. Returns variant " +
+				"details including chromosome, start/end coordinates (GRCh38), variant class (duplication/deletion), " +
+				"mean_ratio, genotype, inheritance, pathogenicity, and dosage sensitivity scores. " +
+				"May include GRCh37 alternative_positions with liftover scores.",
 			category: "patient",
 			pathParams: [
 				{
 					name: "id",
 					type: "string",
 					required: true,
-					description: "DECIPHER patient ID",
-				},
-			],
-		},
-		{
-			method: "GET",
-			path: "/patients/{id}/phenotypes",
-			summary: "Get all phenotypes (HPO terms) for a specific patient",
-			category: "patient",
-			pathParams: [
-				{
-					name: "id",
-					type: "string",
-					required: true,
-					description: "DECIPHER patient ID",
+					description: "DECIPHER patient ID (numeric)",
 				},
 			],
 		},
 
-		// === CNV ===
+		// === Gene ===
 		{
 			method: "GET",
-			path: "/cnvs",
+			path: "/data/gene/{symbol}",
 			summary:
-				"Search CNVs by genomic region, type, and pathogenicity. Returns copy number variants with associated patient and phenotype data.",
-			category: "cnv",
-			queryParams: [
+				"Get comprehensive gene information by HGNC symbol. Returns Ensembl IDs, genomic " +
+				"coordinates (GRCh38), HI score (haploinsufficiency 0-1), pLI, LOEUF, missense Z-score, " +
+				"constraint metrics, OMIM disease associations with inheritance patterns, ClinGen " +
+				"actionability reports, GenCC classifications, ACMG secondary findings status, " +
+				"G2P associations, protein function, PDB structures, and PubMed references.",
+			category: "gene",
+			pathParams: [
 				{
-					name: "chr",
+					name: "symbol",
 					type: "string",
-					required: false,
-					description:
-						"Chromosome (e.g. '1', '2', ..., '22', 'X', 'Y'). Required for region searches.",
-				},
-				{
-					name: "start",
-					type: "number",
-					required: false,
-					description: "Start position (GRCh37/hg19 coordinates). Use with chr and end.",
-				},
-				{
-					name: "end",
-					type: "number",
-					required: false,
-					description: "End position (GRCh37/hg19 coordinates). Use with chr and start.",
-				},
-				{
-					name: "type",
-					type: "string",
-					required: false,
-					description: "CNV type filter",
-					enum: ["deletion", "duplication", "insertion"],
-				},
-				{
-					name: "pathogenicity",
-					type: "string",
-					required: false,
-					description: "Pathogenicity classification filter",
-					enum: [
-						"pathogenic",
-						"likely_pathogenic",
-						"uncertain",
-						"likely_benign",
-						"benign",
-					],
-				},
-				{
-					name: "mean_ratio_min",
-					type: "number",
-					required: false,
-					description: "Minimum mean ratio (log2) filter",
-				},
-				{
-					name: "mean_ratio_max",
-					type: "number",
-					required: false,
-					description: "Maximum mean ratio (log2) filter",
-				},
-				{
-					name: "limit",
-					type: "number",
-					required: false,
-					description: "Max results to return (default: 100)",
-				},
-				{
-					name: "offset",
-					type: "number",
-					required: false,
-					description: "Offset for pagination",
+					required: true,
+					description: "HGNC gene symbol (e.g. BRCA1, TP53, BRAF)",
 				},
 			],
 		},
 		{
 			method: "GET",
-			path: "/cnvs/{id}",
-			summary: "Get details for a specific CNV by ID, including genomic coordinates and annotations",
-			category: "cnv",
+			path: "/data/gene/{symbol}/g2p",
+			summary:
+				"Get Gene2Phenotype (G2P) associations for a gene. Returns disease-gene relationships " +
+				"with confidence level (definitive/strong/moderate), allelic requirement " +
+				"(monoallelic/biallelic), molecular mechanism (loss of function, gain of function), " +
+				"variant consequences, and associated clinical panels (Cancer, DD, Skeletal, etc.).",
+			category: "gene",
 			pathParams: [
 				{
-					name: "id",
+					name: "symbol",
 					type: "string",
 					required: true,
-					description: "CNV identifier",
+					description: "HGNC gene symbol (e.g. BRCA1, TP53)",
 				},
 			],
 		},
@@ -195,274 +135,30 @@ export const decipherCatalog: ApiCatalog = {
 		// === Syndrome ===
 		{
 			method: "GET",
-			path: "/syndromes",
+			path: "/data/syndromes",
 			summary:
-				"List known microdeletion/microduplication syndromes with their genomic regions and phenotypes",
+				"Get all known microdeletion/microduplication syndromes in DECIPHER. Returns ~96 " +
+				"syndromes with their IDs, names, grades, draft status, and associated variants " +
+				"(deletion/duplication with GRCh38 coordinates, genotype, copy number). " +
+				"Variants may include GRCh37 alternative_positions with liftover scores.",
 			category: "syndrome",
-			queryParams: [
-				{
-					name: "chr",
-					type: "string",
-					required: false,
-					description: "Filter syndromes by chromosome",
-				},
-				{
-					name: "limit",
-					type: "number",
-					required: false,
-					description: "Max syndromes to return",
-				},
-				{
-					name: "offset",
-					type: "number",
-					required: false,
-					description: "Offset for pagination",
-				},
-			],
 		},
 		{
 			method: "GET",
-			path: "/syndromes/{id}",
+			path: "/data/syndrome/{id}",
 			summary:
-				"Get detailed information for a specific syndrome including genomic coordinates, genes, and phenotypes",
+				"Get detailed information for a specific syndrome including name, description, " +
+				"grade, associated genomic variants (deletions/duplications with coordinates), " +
+				"affected genes (with Ensembl IDs, constraint scores, HI scores, disease associations), " +
+				"phenotypes, mortality data, and links to patient support resources. " +
+				"Example: id=1 is Wolf-Hirschhorn Syndrome, id=14 is Prader-Willi Type 1.",
 			category: "syndrome",
 			pathParams: [
 				{
 					name: "id",
 					type: "string",
 					required: true,
-					description: "Syndrome ID",
-				},
-			],
-		},
-		{
-			method: "GET",
-			path: "/syndromes/{id}/patients",
-			summary: "Get patients associated with a specific syndrome",
-			category: "syndrome",
-			pathParams: [
-				{
-					name: "id",
-					type: "string",
-					required: true,
-					description: "Syndrome ID",
-				},
-			],
-			queryParams: [
-				{
-					name: "limit",
-					type: "number",
-					required: false,
-					description: "Max patients to return",
-				},
-				{
-					name: "offset",
-					type: "number",
-					required: false,
-					description: "Offset for pagination",
-				},
-			],
-		},
-
-		// === Prediction ===
-		{
-			method: "GET",
-			path: "/hi-predictions",
-			summary:
-				"Get haploinsufficiency (HI) and triplosensitivity (TS) predictions by gene or region. " +
-				"Scores range from 0-100%, higher = more likely to be dosage sensitive.",
-			category: "prediction",
-			queryParams: [
-				{
-					name: "gene",
-					type: "string",
-					required: false,
-					description: "Gene symbol (e.g. BRAF, TP53) to look up HI/TS predictions",
-				},
-				{
-					name: "chr",
-					type: "string",
-					required: false,
-					description: "Chromosome for region-based lookup",
-				},
-				{
-					name: "start",
-					type: "number",
-					required: false,
-					description: "Start position (GRCh37)",
-				},
-				{
-					name: "end",
-					type: "number",
-					required: false,
-					description: "End position (GRCh37)",
-				},
-				{
-					name: "hi_threshold",
-					type: "number",
-					required: false,
-					description: "Minimum HI score threshold (0-100)",
-				},
-				{
-					name: "limit",
-					type: "number",
-					required: false,
-					description: "Max results to return",
-				},
-				{
-					name: "offset",
-					type: "number",
-					required: false,
-					description: "Offset for pagination",
-				},
-			],
-		},
-
-		// === Population ===
-		{
-			method: "GET",
-			path: "/population-cnvs",
-			summary:
-				"Get population frequency of CNVs from control datasets. " +
-				"Useful for filtering rare vs common variants.",
-			category: "population",
-			queryParams: [
-				{
-					name: "chr",
-					type: "string",
-					required: false,
-					description: "Chromosome",
-				},
-				{
-					name: "start",
-					type: "number",
-					required: false,
-					description: "Start position (GRCh37)",
-				},
-				{
-					name: "end",
-					type: "number",
-					required: false,
-					description: "End position (GRCh37)",
-				},
-				{
-					name: "type",
-					type: "string",
-					required: false,
-					description: "CNV type filter",
-					enum: ["deletion", "duplication"],
-				},
-				{
-					name: "min_frequency",
-					type: "number",
-					required: false,
-					description: "Minimum population frequency (0-1)",
-				},
-				{
-					name: "max_frequency",
-					type: "number",
-					required: false,
-					description: "Maximum population frequency (0-1)",
-				},
-				{
-					name: "limit",
-					type: "number",
-					required: false,
-					description: "Max results to return",
-				},
-				{
-					name: "offset",
-					type: "number",
-					required: false,
-					description: "Offset for pagination",
-				},
-			],
-		},
-		{
-			method: "GET",
-			path: "/population-cnvs/{id}",
-			summary: "Get details for a specific population CNV by ID",
-			category: "population",
-			pathParams: [
-				{
-					name: "id",
-					type: "string",
-					required: true,
-					description: "Population CNV identifier",
-				},
-			],
-		},
-
-		// === Search ===
-		{
-			method: "GET",
-			path: "/search",
-			summary:
-				"Full-text search across patients, CNVs, syndromes, and genes. " +
-				"Accepts gene names, HPO terms, syndrome names, or genomic regions.",
-			category: "search",
-			queryParams: [
-				{
-					name: "q",
-					type: "string",
-					required: true,
-					description:
-						"Search query — gene name, HPO term (e.g. HP:0001250), syndrome name, " +
-						"region (e.g. 1:100000-200000), or free text",
-				},
-				{
-					name: "type",
-					type: "string",
-					required: false,
-					description: "Restrict search to a specific entity type",
-					enum: ["patient", "cnv", "syndrome", "gene"],
-				},
-				{
-					name: "limit",
-					type: "number",
-					required: false,
-					description: "Max results to return",
-				},
-				{
-					name: "offset",
-					type: "number",
-					required: false,
-					description: "Offset for pagination",
-				},
-			],
-		},
-		{
-			method: "GET",
-			path: "/search/phenotype",
-			summary:
-				"Search by HPO phenotype term to find patients and CNVs associated with that phenotype",
-			category: "search",
-			queryParams: [
-				{
-					name: "hpo",
-					type: "string",
-					required: true,
-					description:
-						"HPO term ID (e.g. HP:0001250 for seizures, HP:0001249 for intellectual disability)",
-				},
-				{
-					name: "include_descendants",
-					type: "boolean",
-					required: false,
-					description:
-						"Include descendant HPO terms in search (broader phenotype matching)",
-				},
-				{
-					name: "limit",
-					type: "number",
-					required: false,
-					description: "Max results to return",
-				},
-				{
-					name: "offset",
-					type: "number",
-					required: false,
-					description: "Offset for pagination",
+					description: "DECIPHER syndrome ID (numeric, e.g. 1, 14)",
 				},
 			],
 		},
