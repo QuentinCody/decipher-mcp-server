@@ -6,7 +6,7 @@ interface SchemaEnv {
     DECIPHER_DATA_DO?: unknown;
 }
 
-export function registerGetSchema(server: McpServer, env?: SchemaEnv) {
+export function registerGetSchema(server: McpServer, env?: SchemaEnv): void {
     const handler = createGetSchemaHandler("DECIPHER_DATA_DO", "decipher");
 
     server.registerTool(

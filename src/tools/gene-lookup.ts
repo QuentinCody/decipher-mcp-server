@@ -22,7 +22,7 @@ interface GeneEnv {
 	DECIPHER_DATA_DO: DurableObjectNamespace;
 }
 
-export function registerGeneLookup(server: McpServer, env: GeneEnv) {
+export function registerGeneLookup(server: McpServer, env: GeneEnv): void {
 	const register = (name: string) =>
 		server.registerTool(
 			name,
@@ -94,7 +94,7 @@ export function registerGeneLookup(server: McpServer, env: GeneEnv) {
 							);
 							if (g2pResponse.ok) {
 								const rawG2p = await g2pResponse.json();
-								(geneData as any).g2p_detail = (rawG2p as any)?.content ?? rawG2p;
+								(geneData as Record<string, unknown>).g2p_detail = (rawG2p as Record<string, unknown>)?.content ?? rawG2p;
 							}
 						} catch {
 							// G2P fetch failure is non-fatal
@@ -115,10 +115,9 @@ export function registerGeneLookup(server: McpServer, env: GeneEnv) {
 							? String(geneData.loeuf)
 							: "N/A";
 					const chr = geneData.chr || "unknown";
-					const omimDiseases = Array.isArray(
-						(geneData as any).omim_morbid_diseases,
-					)
-						? (geneData as any).omim_morbid_diseases.length
+					const omimMorbid = (geneData as Record<string, unknown>).omim_morbid_diseases;
+					const omimDiseases = Array.isArray(omimMorbid)
+						? omimMorbid.length
 						: 0;
 
 					const textSummary =
@@ -175,7 +174,7 @@ export function registerGeneLookup(server: McpServer, env: GeneEnv) {
 						});
 
 						if (result.structuredContent) {
-							(result.structuredContent as any)._staging =
+							(result.structuredContent as Record<string, unknown>)._staging =
 								stageResult._staging;
 						}
 

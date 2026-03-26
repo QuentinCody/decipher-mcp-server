@@ -24,7 +24,7 @@ interface SyndromeEnv {
 	DECIPHER_DATA_DO: DurableObjectNamespace;
 }
 
-export function registerSyndromes(server: McpServer, env: SyndromeEnv) {
+export function registerSyndromes(server: McpServer, env: SyndromeEnv): void {
 	const register = (name: string) =>
 		server.registerTool(
 			name,
@@ -95,8 +95,8 @@ export function registerSyndromes(server: McpServer, env: SyndromeEnv) {
 					if (!syndromeId) {
 						// All syndromes: data is { content: { "1": {...}, "2": {...}, ... } }
 						const content =
-							data && typeof data === "object" && (data as any).content
-								? (data as any).content
+							data && typeof data === "object" && (data as Record<string, unknown>).content
+								? (data as Record<string, unknown>).content
 								: data;
 						if (content && typeof content === "object") {
 							syndromeCount = Object.keys(content).length;
@@ -104,7 +104,7 @@ export function registerSyndromes(server: McpServer, env: SyndromeEnv) {
 						textSummary = `DECIPHER: ${syndromeCount} syndromes returned (${Math.round(responseBytes / 1024)}KB)`;
 					} else {
 						// Single syndrome detail — unwrap .content wrapper
-						const detail = (data as any)?.content ?? data;
+						const detail = ((data as Record<string, unknown>)?.content ?? data) as Record<string, unknown>;
 						const syndromeName =
 							detail?.name || `Syndrome ${syndromeId}`;
 						const geneCount = Array.isArray(detail?.Genes)
@@ -126,7 +126,7 @@ export function registerSyndromes(server: McpServer, env: SyndromeEnv) {
 						)?.sessionId;
 
 						// Unwrap .content wrapper and flatten keyed objects into arrays
-						let stageData: unknown = (data as any)?.content ?? data;
+						let stageData: unknown = (data as Record<string, unknown>)?.content ?? data;
 						if (
 							!syndromeId &&
 							stageData &&
@@ -179,7 +179,7 @@ export function registerSyndromes(server: McpServer, env: SyndromeEnv) {
 						});
 
 						if (result.structuredContent) {
-							(result.structuredContent as any)._staging =
+							(result.structuredContent as Record<string, unknown>)._staging =
 								stageResult._staging;
 						}
 

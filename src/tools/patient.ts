@@ -22,7 +22,37 @@ interface PatientEnv {
 	DECIPHER_DATA_DO: DurableObjectNamespace;
 }
 
-export function registerPatient(server: McpServer, env: PatientEnv) {
+/** DECIPHER patient data shape (subset of fields used in this tool) */
+interface PatientData {
+	age?: { years?: number };
+	age_years?: number;
+	chromosomal_sex?: string;
+	counts?: {
+		phenotypes?: number;
+		genotype?: number;
+	};
+	[key: string]: unknown;
+}
+
+/** DECIPHER API wrapper shape */
+interface DecipherContentWrapper {
+	content?: unknown;
+	[key: string]: unknown;
+}
+
+/** Phenotype collection shape */
+interface PhenotypeCollection {
+	Phenotypes?: Record<string, unknown>;
+	[key: string]: unknown;
+}
+
+/** Variant collection shape */
+interface VariantCollection {
+	Variants?: Record<string, unknown>;
+	[key: string]: unknown;
+}
+
+export function registerPatient(server: McpServer, env: PatientEnv): void {
 	const register = (name: string) =>
 		server.registerTool(
 			name,
@@ -100,9 +130,9 @@ export function registerPatient(server: McpServer, env: PatientEnv) {
 						);
 					}
 
-					const rawPatient = (await patientResponse.json()) as Record<string, unknown>;
+					const rawPatient = (await patientResponse.json()) as DecipherContentWrapper;
 					// DECIPHER wraps all responses in { content: { ... } } — unwrap it
-					const patientData = ((rawPatient as any)?.content ?? rawPatient) as Record<string, unknown>;
+					const patientData = (rawPatient?.content ?? rawPatient) as PatientData;
 
 					// Optionally fetch phenotypes and/or variants in parallel
 					const fetchPhenotypes =
@@ -110,10 +140,12 @@ export function registerPatient(server: McpServer, env: PatientEnv) {
 					const fetchVariants =
 						include === "variants" || include === "all";
 
-					const unwrapContent = (raw: unknown): unknown =>
-						raw && typeof raw === "object" && "content" in (raw as Record<string, unknown>)
-							? (raw as Record<string, unknown>).content
-							: raw;
+					const unwrapContent = (raw: unknown): unknown => {
+						if (raw && typeof raw === "object" && "content" in (raw as Record<string, unknown>)) {
+							return (raw as DecipherContentWrapper).content;
+						}
+						return raw;
+					};
 
 					const [phenoResult, variantResult] = await Promise.all([
 						fetchPhenotypes
@@ -151,19 +183,18 @@ export function registerPatient(server: McpServer, env: PatientEnv) {
 					const responseBytes = JSON.stringify(result).length;
 
 					// Build text summary
-					const age = (patientData as any)?.age?.years ?? (patientData as any)?.age_years ?? "unknown";
-					const sex =
-						(patientData as any)?.chromosomal_sex ?? "unknown";
+					const age = patientData?.age?.years ?? patientData?.age_years ?? "unknown";
+					const sex = patientData?.chromosomal_sex ?? "unknown";
 					const phenoCount = phenoResult
 						? Object.keys(
-								(phenoResult as any)?.Phenotypes || {},
+								(phenoResult as PhenotypeCollection)?.Phenotypes || {},
 							).length
-						: (patientData as any)?.counts?.phenotypes ?? "?";
+						: patientData?.counts?.phenotypes ?? "?";
 					const variantCount = variantResult
 						? Object.keys(
-								(variantResult as any)?.Variants || {},
+								(variantResult as VariantCollection)?.Variants || {},
 							).length
-						: (patientData as any)?.counts?.genotype ?? "?";
+						: patientData?.counts?.genotype ?? "?";
 
 					const textSummary =
 						`DECIPHER patient ${patientId}: age ${age}y, sex ${sex}\n` +
@@ -224,7 +255,7 @@ export function registerPatient(server: McpServer, env: PatientEnv) {
 						);
 
 						if (stageResponse.structuredContent) {
-							(stageResponse.structuredContent as any)._staging =
+							(stageResponse.structuredContent as Record<string, unknown>)._staging =
 								stageResult._staging;
 						}
 

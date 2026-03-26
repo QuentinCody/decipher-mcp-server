@@ -17,7 +17,7 @@ interface DecipherEnv {
 }
 
 export class MyMCP extends McpAgent {
-    server: any = new McpServer({
+    server = new McpServer({
         name: "decipher",
         version: "0.2.0",
     });
