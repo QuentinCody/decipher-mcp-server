@@ -204,9 +204,7 @@ export function registerPatient(server: McpServer, env: PatientEnv): void {
 
 					// Stage large responses
 					if (shouldStage(responseBytes) && env.DECIPHER_DATA_DO) {
-						const sessionId = (
-							extra as { sessionId?: string }
-						)?.sessionId;
+						const sessionId = (extra as Record<string, unknown>);
 						const stageResult = await stageToDoAndRespond(
 							result,
 							env.DECIPHER_DATA_DO,

@@ -129,9 +129,7 @@ export function registerGeneLookup(server: McpServer, env: GeneEnv): void {
 
 					// Stage large responses
 					if (shouldStage(responseBytes) && env.DECIPHER_DATA_DO) {
-						const sessionId = (
-							extra as { sessionId?: string }
-						)?.sessionId;
+						const sessionId = (extra as Record<string, unknown>);
 						const stageResult = await stageToDoAndRespond(
 							geneData,
 							env.DECIPHER_DATA_DO,

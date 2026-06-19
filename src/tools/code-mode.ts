@@ -35,6 +35,8 @@ export function registerCodeMode(
 	// Register the execute tool (V8 isolate via DynamicWorkerExecutor)
 	const executeTool = createExecuteTool({
 		prefix: "decipher",
+		// Verifiable provenance: decipher_execute results carry a _meta.citation.
+		source: { id: "decipher", name: "DECIPHER", url: "https://www.deciphergenomics.org" },
 		catalog: decipherCatalog,
 		apiFetch,
 		doNamespace: env.DECIPHER_DATA_DO,

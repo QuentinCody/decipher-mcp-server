@@ -121,9 +121,7 @@ export function registerSyndromes(server: McpServer, env: SyndromeEnv): void {
 
 					// Stage large responses
 					if (shouldStage(responseBytes) && env.DECIPHER_DATA_DO) {
-						const sessionId = (
-							extra as { sessionId?: string }
-						)?.sessionId;
+						const sessionId = (extra as Record<string, unknown>);
 
 						// Unwrap .content wrapper and flatten keyed objects into arrays
 						let stageData: unknown = (data as Record<string, unknown>)?.content ?? data;
