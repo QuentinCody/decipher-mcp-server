@@ -6,7 +6,7 @@
  * Stages large responses into Durable Object SQLite for SQL access.
  */
 
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@bio-mcp/shared/mcp";
 import { z } from "zod";
 import { decipherFetch } from "../lib/http";
 import {
