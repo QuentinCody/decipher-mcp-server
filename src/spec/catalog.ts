@@ -1,166 +1,351 @@
 /**
- * DECIPHER internal data API catalog — reverse-engineered from the
- * deciphergenomics.org Nuxt.js frontend's /data/ endpoints.
+ * Catalog for the DECIPHER server's Code Mode surface.
  *
- * IMPORTANT: DECIPHER does NOT have a documented public REST API.
- * The original "open-access API" at /ddd/openaccess/api does NOT exist.
- * These endpoints are the internal data layer used by the Nuxt SSR frontend.
- * They return JSON and are accessible without authentication for open-access data,
- * but they are undocumented and may change without notice.
+ * ACCESS, corrected 2026-08-27 (the previous `auth: "none"` and "accessible
+ * without authentication" notes are false):
  *
- * DECIPHER (Database of Chromosomal Imbalance and Phenotype in Humans Using
- * Ensembl Resources) provides genomic variant and clinical phenotype data
- * for rare disease research.
+ *   - DECIPHER's /data/* endpoints enforce a SAME-ORIGIN Referer check. Without
+ *     `Referer: https://www.deciphergenomics.org/` every path returns
+ *     403 {"error":"Access Denied"}; a foreign Referer is rejected too. This
+ *     server sends no Referer unless the deployment opts in with
+ *     DECIPHER_SEND_REFERER=1, so /data/* paths are 403 by default.
+ *   - DECIPHER's sanctioned JSON:API at /api/* returns
+ *     403 {"detail":"Client key not provided"} until DECIPHER_CLIENT_KEY holds
+ *     a Client API Key, which is requested from DECIPHER. How a key is granted
+ *     is UNCONFIRMED from outside — see the note in ../lib/http.ts.
+ *   - The DEFAULT data path is therefore /mirror/* — the same content as
+ *     published openly, for programmatic use, by EBI Gene2Phenotype, ClinGen
+ *     and NCBI dbVar. Keyless, and no origin is asserted.
  *
- * Verified working endpoints (March 2026):
- *   /data/patient/{id}, /data/patient/{id}/phenotypes, /data/patient/{id}/variants,
- *   /data/gene/{symbol}, /data/gene/{symbol}/g2p,
- *   /data/syndromes, /data/syndrome/{id}
+ * ROBOTS.TXT (fetched live 2026-08-27) disallows /data/patient/, /patient/,
+ * the per-gene "protein" and "phenotypes" sub-paths — and also /api/. The
+ * protein and phenotypes sub-paths are therefore not listed here at all.
+ *
+ * Two robots-disallowed paths ARE listed, each for a reason that is not
+ * "advertise the data":
+ *
+ *   - /api/{resource} and /api/{resource}/{id} — robots.txt speaks to
+ *     CRAWLERS. /api/* is DECIPHER's own sanctioned PROGRAMMATIC surface,
+ *     reached under a Client API Key rather than by crawling, so the crawler
+ *     exclusion does not govern a keyed API call. Without a key every path
+ *     answers 403 {"detail":"Client key not provided"}, which is what a caller
+ *     gets today.
+ *   - /data/patient/{id} — listed so that the isolate reaches this server's
+ *     REFUSAL. The catalog validator (preflightUnknownEndpoint in
+ *     @bio-mcp/shared) rejects any path with no catalog entry BEFORE the
+ *     adapter runs, so with no entry a Code Mode caller got
+ *     "Unknown endpoint … does not exist" — false, and it hides the reason.
+ *     With the entry, api.get() reaches createDecipherApiFetch, which refuses
+ *     with 451 and the robots.txt + Terms of Use clause 5 explanation. The
+ *     entry can never return patient data: the refusal precedes every fetch.
  */
 
 import type { ApiCatalog } from "@bio-mcp/shared/codemode/catalog";
 
 export const decipherCatalog: ApiCatalog = {
-	name: "DECIPHER Internal Data",
+	name: "DECIPHER (open mirrors + gated DECIPHER endpoints)",
 	baseUrl: "https://www.deciphergenomics.org",
 	version: "undocumented",
-	auth: "none",
-	endpointCount: 7,
+	auth: "mirrors: none; /data/*: DECIPHER_SEND_REFERER opt-in; /api/*: DECIPHER_CLIENT_KEY",
+	endpointCount: 13,
 	notes:
-		"- DECIPHER does NOT have a documented public REST API — these are internal Nuxt.js data endpoints\n" +
-		"- All endpoints are under /data/ and return JSON without authentication for open-access data\n" +
-		"- These endpoints may change without notice — they are not officially supported\n" +
-		"- Gene data uses GRCh38 coordinates; syndromes may have GRCh37 alternative_positions\n" +
-		"- Patient IDs are numeric (e.g. 255882); only open-access consented patients are accessible\n" +
-		"- Gene lookups use HGNC symbols (e.g. BRCA1, TP53)\n" +
-		"- Syndrome IDs are numeric (e.g. 1 = Wolf-Hirschhorn, 14 = Prader-Willi Type 1)\n" +
-		"- Gene endpoint includes HI/TS scores, pLI, LOEUF, constraint metrics, OMIM diseases, G2P, GenCC\n" +
-		"- Phenotypes use HPO (Human Phenotype Ontology) term IDs (e.g. HP:0001250)\n" +
-		"- Patient variant data includes CNV coordinates, mean_ratio, dosage sensitivity scores\n" +
-		"- There is NO search endpoint — you must know the patient ID, gene symbol, or syndrome ID\n" +
-		"- For bulk data access, DECIPHER provides file downloads at /about/downloads/data (not via API)",
+		"- DEFAULT PATH is /mirror/* — keyless, openly published, no origin assertion\n" +
+		"- /mirror/g2p/{path} proxies EBI Gene2Phenotype (https://www.ebi.ac.uk/gene2phenotype/api)\n" +
+		"- /mirror/clingen/regions returns ClinGen's parsed GRCh38 region curation list\n" +
+		"- /mirror/dbvar/nstd183/calls streams DECIPHER's consensus CNVs from NCBI dbVar and filters by region\n" +
+		"- /data/* returns 403 {\"error\":\"Access Denied\"} unless DECIPHER_SEND_REFERER=1 (same-origin Referer check)\n" +
+		"- /api/* returns 403 {\"detail\":\"Client key not provided\"} unless DECIPHER_CLIENT_KEY is set\n" +
+		"- /data/patient/* is REFUSED by this server with HTTP 451 (robots.txt + Terms of Use clause 5) — it is listed only so the refusal, not a bogus 404, reaches you\n" +
+		"- DECIPHER wraps its own /data/ responses in { content: { ... } }; the mirrors do not\n" +
+		"- All coordinates are GRCh38; DECIPHER syndrome variants may carry GRCh37 alternative_positions\n" +
+		"- Gene lookups use HGNC symbols (e.g. BRCA1, TP53); ClinGen regions use ISCA IDs (e.g. ISCA-46755)\n" +
+		"- dbVar allele columns arrive tagged (AC=9, AF=0.0106, AN=845) and are parsed to numbers here",
 	endpoints: [
-		// === Patient ===
+		// === Open mirrors (default path) ===
 		{
 			method: "GET",
-			path: "/data/patient/{id}",
+			path: "/mirror/g2p/gene/{symbol}/",
 			summary:
-				"Get open-access patient details including demographics (age, sex), family members, " +
-				"project info, and counts of genotypes, phenotypes, and assessments. " +
-				"Only open-access consented patients are accessible without login.",
-			category: "patient",
+				"EBI Gene2Phenotype gene record: GRCh38 locus, HGNC/Ensembl/OMIM ids, " +
+				"synonyms, last_updated. Keyless. 404 for a symbol G2P does not curate.",
+			category: "gene",
+			featured: true,
 			pathParams: [
 				{
-					name: "id",
+					name: "symbol",
 					type: "string",
 					required: true,
-					description: "DECIPHER patient ID (numeric, e.g. 255882)",
+					description: "HGNC gene symbol (e.g. BRCA1, ARID1B)",
 				},
 			],
+			example: "return await api.get('/mirror/g2p/gene/BRCA1/');",
 		},
 		{
 			method: "GET",
-			path: "/data/patient/{id}/phenotypes",
+			path: "/mirror/g2p/gene/{symbol}/summary/",
 			summary:
-				"Get all HPO phenotypes for a specific open-access patient. Returns phenotype records " +
-				"with HPO term IDs, presence status, and HPO graph path mappings to top-level categories.",
-			category: "patient",
+				"EBI Gene2Phenotype curated disease records for a gene — the openly-published " +
+				"equivalent of DECIPHER's G2PAssociations block. Each record carries disease, " +
+				"genotype (monoallelic/biallelic), confidence (definitive/strong/moderate/limited), " +
+				"molecular_mechanism, variant_consequence, panels and stable_id (G2P00119).",
+			category: "gene",
+			featured: true,
 			pathParams: [
 				{
-					name: "id",
+					name: "symbol",
 					type: "string",
 					required: true,
-					description: "DECIPHER patient ID (numeric)",
+					description: "HGNC gene symbol (e.g. BRCA1)",
 				},
 			],
+			coveredByTool: "decipher_gene_lookup",
+			example:
+				"const g = await api.get('/mirror/g2p/gene/BRCA1/summary/');\nreturn g.records_summary;",
 		},
 		{
 			method: "GET",
-			path: "/data/patient/{id}/variants",
+			path: "/mirror/g2p/search/",
 			summary:
-				"Get all variants (primarily CNVs) for a specific open-access patient. Returns variant " +
-				"details including chromosome, start/end coordinates (GRCh38), variant class (duplication/deletion), " +
-				"mean_ratio, genotype, inheritance, pathogenicity, and dosage sensitivity scores. " +
-				"May include GRCh37 alternative_positions with liftover scores.",
-			category: "patient",
-			pathParams: [
+				"Search Gene2Phenotype records. Query params: type (gene|disease|panel), " +
+				"query (the term). Returns { count, results: [{ stable_id, gene, genotype, " +
+				"disease, mechanism, panel, confidence }] }.",
+			category: "gene",
+			queryParams: [
 				{
-					name: "id",
+					name: "type",
 					type: "string",
 					required: true,
-					description: "DECIPHER patient ID (numeric)",
+					description: "gene | disease | panel",
+					enum: ["gene", "disease", "panel"],
+				},
+				{
+					name: "query",
+					type: "string",
+					required: true,
+					description: "Search term (e.g. ARID1B)",
 				},
 			],
+			example:
+				"return await api.get('/mirror/g2p/search/', { type: 'gene', query: 'ARID1B' });",
+		},
+		{
+			method: "GET",
+			path: "/mirror/g2p/panels/",
+			summary:
+				"List Gene2Phenotype panels (Cancer, DD, Skeletal, Skin, Eye, …) with per-panel " +
+				"record/gene counts, a confidence breakdown, and last_updated.",
+			category: "gene",
+			example: "return await api.get('/mirror/g2p/panels/');",
+		},
+		{
+			method: "GET",
+			path: "/mirror/clingen/regions",
+			summary:
+				"ClinGen dosage-sensitivity region curation (GRCh38), parsed: ~513 recurrent " +
+				"CNV regions with isca_id, name, cytoband, chr/start/end, haploinsufficiency and " +
+				"triplosensitivity score + description + PMIDs, date_last_evaluated. This is the " +
+				"open equivalent of DECIPHER's CNV-syndrome coordinates.",
+			category: "syndrome",
+			featured: true,
+			coveredByTool: "decipher_syndromes",
+			responseShape:
+				"{ region_count: number, regions: Array<{ isca_id, name, cytoband, chr, start, end, haploinsufficiency_score, triplosensitivity_score, ... }> }",
+			example:
+				"const r = await api.get('/mirror/clingen/regions');\nreturn r.regions.filter(x => x.name.includes('22q11.2'));",
+		},
+		{
+			method: "GET",
+			path: "/mirror/dbvar/nstd183/calls",
+			summary:
+				"Population CNV frequency from NCBI dbVar nstd183 'DECIPHER Consensus CNVs' " +
+				"(GRCh38, ~67k calls), filtered to a region. Each call carries accession, type, " +
+				"coordinates, and allele_count / allele_frequency / allele_number. The study file " +
+				"is streamed and filtered per call, so always pass a region.",
+			category: "cnv",
+			featured: true,
+			coveredByTool: "decipher_cnv_frequency",
+			queryParams: [
+				{
+					name: "chr",
+					type: "string",
+					required: true,
+					description: "Chromosome without prefix (e.g. '22')",
+				},
+				{
+					name: "start",
+					type: "number",
+					required: true,
+					description: "Region start (GRCh38, 1-based)",
+				},
+				{
+					name: "end",
+					type: "number",
+					required: true,
+					description: "Region end (GRCh38, 1-based)",
+				},
+				{
+					name: "variant_type",
+					type: "string",
+					required: false,
+					description: "deletion | duplication",
+				},
+				{
+					name: "min_allele_frequency",
+					type: "number",
+					required: false,
+					description: "Keep only calls with AF >= this value",
+				},
+				{
+					name: "limit",
+					type: "number",
+					required: false,
+					description: "Maximum calls returned (default 200)",
+				},
+			],
+			example:
+				"return await api.get('/mirror/dbvar/nstd183/calls', { chr: '22', start: 18900000, end: 21500000, variant_type: 'deletion' });",
 		},
 
-		// === Gene ===
+		// === DECIPHER's own endpoints (gated) ===
 		{
 			method: "GET",
 			path: "/data/gene/{symbol}",
 			summary:
-				"Get comprehensive gene information by HGNC symbol. Returns Ensembl IDs, genomic " +
-				"coordinates (GRCh38), HI score (haploinsufficiency 0-1), pLI, LOEUF, missense Z-score, " +
-				"constraint metrics, OMIM disease associations with inheritance patterns, ClinGen " +
-				"actionability reports, GenCC classifications, ACMG secondary findings status, " +
-				"G2P associations, protein function, PDB structures, and PubMed references.",
+				"DECIPHER's composite gene record — haploinsufficiency (HI) score, p_hi/p_ts, " +
+				"s_het, pLI, LOEUF, missense Z-score, OMIM morbid diseases, ClinGen actionability, " +
+				"GenCC, ACMG secondary findings, protein mechanism evidence. No open mirror " +
+				"reproduces these scores. REQUIRES DECIPHER_SEND_REFERER=1; otherwise 403 " +
+				'{"error":"Access Denied"}.',
 			category: "gene",
 			pathParams: [
 				{
 					name: "symbol",
 					type: "string",
 					required: true,
-					description: "HGNC gene symbol (e.g. BRCA1, TP53, BRAF)",
+					description: "HGNC gene symbol (e.g. BRCA1)",
 				},
 			],
+			usageHint:
+				"Try /mirror/g2p/gene/{symbol}/summary/ first — it is keyless. Use this only " +
+				"when the deployment has opted into the Referer and you need DECIPHER's own scores.",
+		},
+		{
+			method: "GET",
+			path: "/data/syndromes",
+			summary:
+				"DECIPHER's ~96 microdeletion/microduplication syndromes with numeric syndrome " +
+				"IDs, grades and variant coordinates. REQUIRES DECIPHER_SEND_REFERER=1; " +
+				'otherwise 403 {"error":"Access Denied"}. /data/syndrome/{id} returns one ' +
+				"syndrome with its genes, phenotypes and mortality data.",
+			category: "syndrome",
+			usageHint:
+				"Prefer the keyless /mirror/clingen/regions unless the deployment has opted in.",
 		},
 		{
 			method: "GET",
 			path: "/data/gene/{symbol}/g2p",
 			summary:
-				"Get Gene2Phenotype (G2P) associations for a gene. Returns disease-gene relationships " +
-				"with confidence level (definitive/strong/moderate), allelic requirement " +
-				"(monoallelic/biallelic), molecular mechanism (loss of function, gain of function), " +
-				"variant consequences, and associated clinical panels (Cancer, DD, Skeletal, etc.).",
+				"DECIPHER's own G2P association block for one gene. REQUIRES " +
+				'DECIPHER_SEND_REFERER=1; otherwise 403 {"error":"Access Denied"}. Not ' +
+				"robots-disallowed. The keyless equivalent is /mirror/g2p/gene/{symbol}/summary/.",
 			category: "gene",
 			pathParams: [
 				{
 					name: "symbol",
 					type: "string",
 					required: true,
-					description: "HGNC gene symbol (e.g. BRCA1, TP53)",
+					description: "HGNC gene symbol (e.g. BRCA1)",
 				},
 			],
-		},
-
-		// === Syndrome ===
-		{
-			method: "GET",
-			path: "/data/syndromes",
-			summary:
-				"Get all known microdeletion/microduplication syndromes in DECIPHER. Returns ~96 " +
-				"syndromes with their IDs, names, grades, draft status, and associated variants " +
-				"(deletion/duplication with GRCh38 coordinates, genotype, copy number). " +
-				"Variants may include GRCh37 alternative_positions with liftover scores.",
-			category: "syndrome",
+			usageHint:
+				"Prefer the keyless /mirror/g2p/gene/{symbol}/summary/ — same curation, no origin assertion.",
+			example: "return await api.get('/data/gene/BRCA1/g2p');",
 		},
 		{
 			method: "GET",
 			path: "/data/syndrome/{id}",
 			summary:
-				"Get detailed information for a specific syndrome including name, description, " +
-				"grade, associated genomic variants (deletions/duplications with coordinates), " +
-				"affected genes (with Ensembl IDs, constraint scores, HI scores, disease associations), " +
-				"phenotypes, mortality data, and links to patient support resources. " +
-				"Example: id=1 is Wolf-Hirschhorn Syndrome, id=14 is Prader-Willi Type 1.",
+				"One DECIPHER syndrome with its genes, phenotypes and mortality data. " +
+				'REQUIRES DECIPHER_SEND_REFERER=1; otherwise 403 {"error":"Access Denied"}. ' +
+				"Not robots-disallowed.",
 			category: "syndrome",
 			pathParams: [
 				{
 					name: "id",
 					type: "string",
 					required: true,
-					description: "DECIPHER syndrome ID (numeric, e.g. 1, 14)",
+					description: "Numeric DECIPHER syndrome id (from /data/syndromes)",
 				},
 			],
+			usageHint:
+				"Prefer the keyless /mirror/clingen/regions unless the deployment has opted in.",
+			example: "return await api.get('/data/syndrome/1');",
+		},
+		{
+			method: "GET",
+			path: "/data/patient/{id}",
+			summary:
+				"REFUSED BY THIS SERVER — returns 451 without contacting DECIPHER. " +
+				"robots.txt disallows /data/patient/ and Terms of Use clause 5 forbids copying " +
+				"patient data from the website; bulk access goes through a DECIPHER Data Access " +
+				"Agreement. Listed only so this refusal reaches you instead of a misleading 404. " +
+				"The DECIPHER_SEND_REFERER opt-in does NOT re-open it.",
+			category: "patient",
+			pathParams: [
+				{
+					name: "id",
+					type: "string",
+					required: true,
+					description: "DECIPHER patient id — refused whatever the value",
+				},
+			],
+			usageHint:
+				"Use /mirror/dbvar/nstd183/calls for population CNV frequency instead. Do not retry this path.",
+		},
+		{
+			method: "GET",
+			path: "/api/{resource}",
+			summary:
+				"DECIPHER's sanctioned JSON:API, collection level (e.g. /api/genes). REQUIRES a " +
+				"Client API Key in DECIPHER_CLIENT_KEY; without one it returns 403 " +
+				'{"detail":"Client key not provided"}. A key is issued through DECIPHER, not by ' +
+				"signup — see https://www.deciphergenomics.org/api-docs.",
+			category: "decipher-api",
+			pathParams: [
+				{
+					name: "resource",
+					type: "string",
+					required: true,
+					description:
+						"ONE JSON:API collection segment (e.g. genes). A member path such as " +
+						"genes/BRCA1 belongs to /api/{resource}/{id} — a path param never spans a slash.",
+				},
+			],
+			example: "return await api.get('/api/genes');",
+		},
+		{
+			method: "GET",
+			path: "/api/{resource}/{id}",
+			summary:
+				"DECIPHER's sanctioned JSON:API, member level (e.g. /api/genes/BRCA1). REQUIRES a " +
+				"Client API Key in DECIPHER_CLIENT_KEY; without one it returns 403 " +
+				'{"detail":"Client key not provided"}.',
+			category: "decipher-api",
+			pathParams: [
+				{
+					name: "resource",
+					type: "string",
+					required: true,
+					description: "JSON:API collection (e.g. genes)",
+				},
+				{
+					name: "id",
+					type: "string",
+					required: true,
+					description: "Member id (e.g. BRCA1)",
+				},
+			],
+			example: "return await api.get('/api/genes/BRCA1');",
 		},
 	],
 };

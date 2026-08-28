@@ -46,6 +46,21 @@
 				"name": "DECIPHER_DATA_DO"
 			}]
 	},
+	// DECIPHER_SEND_REFERER — OPT-IN, DEFAULT OFF.
+	// DECIPHER's /data/* endpoints enforce a same-origin Referer check and answer
+	// 403 {"error":"Access Denied"} without one. Set this to "1" ONLY as a
+	// deliberate operator decision to send `Referer: https://www.deciphergenomics.org/`;
+	// while it is "0" the server takes its default data path through the openly
+	// published mirrors (EBI Gene2Phenotype, ClinGen, dbVar nstd183) instead.
+	//
+	// DECIPHER_CLIENT_KEY is NOT declared here — it is a secret for the sanctioned
+	// /api/* JSON:API, set with:
+	//   pnpm --filter decipher-mcp-server exec wrangler secret put DECIPHER_CLIENT_KEY
+	// DECIPHER issues a Client API Key only under a signed API Agreement
+	// (https://www.deciphergenomics.org/api-docs, contact@deciphergenomics.org).
+	"vars": {
+		"DECIPHER_SEND_REFERER": "0"
+	},
 	"worker_loaders": [
 		{
 			"binding": "CODE_MODE_LOADER"

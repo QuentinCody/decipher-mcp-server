@@ -1,8 +1,10 @@
 /**
- * DecipherDataDO — Durable Object for staging large DECIPHER responses.
+ * DecipherDataDO — Durable Object for staging large responses.
  *
- * Extends RestStagingDO with schema hints matching the actual internal
- * /data/ API response structures from deciphergenomics.org.
+ * Extends RestStagingDO with schema hints for both data paths: the openly-
+ * published mirrors this server reads by default (ClinGen dosage regions,
+ * dbVar nstd183 CNV calls, Gene2Phenotype records) and DECIPHER's own /data/
+ * shapes behind the DECIPHER_SEND_REFERER opt-in.
  */
 
 import { RestStagingDO } from "@bio-mcp/shared/staging/rest-staging-do";
@@ -96,6 +98,32 @@ export class DecipherDataDO extends RestStagingDO {
 			const sample = data[0];
 			if (!sample || typeof sample !== "object") return undefined;
 
+			// ClinGen dosage-sensitivity regions (default syndromes path)
+			if ("isca_id" in sample) {
+				return {
+					tableName: "clingen_regions",
+					indexes: [
+						"isca_id",
+						"chr",
+						"start",
+						"haploinsufficiency_score",
+						"triplosensitivity_score",
+					],
+				};
+			}
+			// dbVar nstd183 CNV calls (decipher_cnv_frequency)
+			if ("variant_call_accession" in sample) {
+				return {
+					tableName: "cnv_calls",
+					indexes: [
+						"variant_call_accession",
+						"chr",
+						"start",
+						"variant_call_type",
+						"allele_frequency",
+					],
+				};
+			}
 			if ("syndrome_id" in sample) {
 				return {
 					tableName: "syndromes",

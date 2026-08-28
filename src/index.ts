@@ -6,39 +6,51 @@ import { registerGetSchema } from "./tools/get-schema";
 import { registerCodeMode } from "./tools/code-mode";
 import { registerGeneLookup } from "./tools/gene-lookup";
 import { registerSyndromes } from "./tools/syndromes";
+import { registerCnvFrequency } from "./tools/cnv-frequency";
 import { registerPatient } from "./tools/patient";
+import { type DecipherAccessEnv, readDecipherAccess } from "./lib/http";
 import { DecipherDataDO } from "./do";
 
 // Export Durable Object classes
 export { DecipherDataDO };
 
-interface DecipherEnv {
+interface DecipherEnv extends DecipherAccessEnv {
     DECIPHER_DATA_DO: DurableObjectNamespace;
     CODE_MODE_LOADER: WorkerLoader;
+    /** OPT-IN, default off — send `Referer: <baseUrl>/` on DECIPHER /data/* calls. */
+    DECIPHER_SEND_REFERER?: string;
+    /** Secret. Credential seam for DECIPHER's sanctioned /api/* JSON:API. */
+    DECIPHER_CLIENT_KEY?: string;
 }
 
 export class MyMCP extends StatelessMcpWorker {
     server = new McpServer({
         name: "decipher",
-        version: "0.2.0",
+        version: "0.3.0",
     });
 
     async init() {
 
     	configureCitationSigning(this.env);
         const env = this.env as unknown as DecipherEnv;
+        // Resolved once per instance: no Referer and no client key unless the
+        // deployment sets them. See src/lib/http.ts for why the default is off.
+        const access = readDecipherAccess(env);
 
         // Hand-built direct tools
-        registerGeneLookup(this.server, env);
-        registerSyndromes(this.server, env);
-        registerPatient(this.server, env);
+        registerGeneLookup(this.server, env, access);
+        registerSyndromes(this.server, env, access);
+        registerCnvFrequency(this.server, env);
+        // Retired on purpose (robots.txt + Terms of Use clause 5) — returns
+        // NOT_SUPPORTED and makes no upstream request under either flag.
+        registerPatient(this.server);
 
         // Staging tools
         registerQueryData(this.server, env);
         registerGetSchema(this.server, env);
 
         // Code Mode tools (search catalog + V8 isolate execute)
-        registerCodeMode(this.server, env);
+        registerCodeMode(this.server, env, access);
     }
 }
 

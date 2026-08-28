@@ -1,16 +1,26 @@
 /**
- * decipher_syndromes — List all DECIPHER CNV syndromes or get details for one.
+ * decipher_syndromes — recurrent CNV syndrome regions with genomic coordinates.
  *
- * Two modes:
- *   - No ID: fetches all ~96 syndromes from /data/syndromes
- *   - With ID: fetches detailed syndrome info from /data/syndrome/{id}
+ * Two data paths, chosen by DECIPHER_SEND_REFERER (see ../lib/http.ts):
  *
- * The full syndrome list is always staged (typically ~80KB+).
+ *   OFF (default) — ClinGen's dosage-sensitivity region curation list: the
+ *     openly-published recurrent CNV regions with GRCh38 coordinates and
+ *     haploinsufficiency / triplosensitivity scores, evidence descriptions and
+ *     PMIDs. Regions are identified by ISCA ID (e.g. ISCA-46755).
+ *   ON — DECIPHER's own /data/syndromes and /data/syndrome/{id}, which need the
+ *     same-origin Referer opt-in and use DECIPHER's numeric syndrome IDs.
+ *
+ * The full list is staged (ClinGen ~513 regions, DECIPHER ~96 syndromes).
  */
 
 import type { McpServer } from "@bio-mcp/shared/mcp";
 import { z } from "zod";
-import { decipherFetch } from "../lib/http";
+import { type DecipherAccess, decipherFetch } from "../lib/http";
+import {
+	CLINGEN_REGION_TSV,
+	type ClinGenRegion,
+	fetchClinGenRegions,
+} from "../lib/mirrors";
 import {
 	createCodeModeResponse,
 	createCodeModeError,
@@ -24,29 +34,39 @@ interface SyndromeEnv {
 	DECIPHER_DATA_DO: DurableObjectNamespace;
 }
 
-export function registerSyndromes(server: McpServer, env: SyndromeEnv): void {
+export function registerSyndromes(
+	server: McpServer,
+	env: SyndromeEnv,
+	access: DecipherAccess,
+): void {
 	const register = (name: string) =>
 		server.registerTool(
 			name,
 			{
-				title: "Get DECIPHER Syndromes",
+				title: "Get CNV Syndrome Regions",
 				description:
-					"Get DECIPHER microdeletion/microduplication CNV syndromes.\n\n" +
-					"Two modes:\n" +
-					"  - Without syndrome_id: returns all ~96 syndromes with IDs, names, grades, " +
-					"and associated genomic variants (deletions/duplications with GRCh38 coordinates).\n" +
-					"  - With syndrome_id: returns detailed info for one syndrome including name, " +
-					"description, associated genes (with Ensembl IDs, constraint scores, HI scores), " +
-					"phenotypes, mortality data, and patient support links.\n\n" +
-					"Well-known syndromes: 1=Wolf-Hirschhorn, 14=Prader-Willi Type 1, " +
-					"2=Cri du Chat, 15=Angelman, 3=Williams-Beuren.",
+					"Get recurrent microdeletion/microduplication CNV syndrome regions.\n\n" +
+					"Default source (no credential, no origin assertion): ClinGen's dosage-" +
+					"sensitivity region curation list — ~513 recurrent regions with GRCh38 " +
+					"coordinates, cytoband, haploinsufficiency and triplosensitivity scores, " +
+					"the evidence description and its PMIDs. ClinGen's score codes: 0 no " +
+					"evidence, 1 little, 2 some, 3 sufficient evidence for dosage pathogenicity, " +
+					"30 associated with autosomal recessive phenotype, 40 dosage sensitivity " +
+					"unlikely. Regions are identified by ISCA ID (e.g. ISCA-46755).\n\n" +
+					"  - Without syndrome_id: returns every region (staged for SQL).\n" +
+					"  - With syndrome_id: matches an ISCA ID, or any region whose name contains " +
+					"the string (e.g. '22q11.2', 'Williams').\n\n" +
+					"When the deployment sets DECIPHER_SEND_REFERER=1, this tool instead returns " +
+					"DECIPHER's own ~96 syndromes, keyed by DECIPHER's numeric syndrome IDs " +
+					"(1=Wolf-Hirschhorn, 14=Prader-Willi Type 1, 2=Cri du Chat, 15=Angelman).",
 				inputSchema: {
 					syndrome_id: z
 						.string()
 						.optional()
 						.describe(
-							"DECIPHER syndrome ID (numeric, e.g. 1, 14). " +
-							"If omitted, returns all syndromes.",
+							"ClinGen ISCA ID or region-name substring (default path), or a " +
+							"DECIPHER numeric syndrome ID when DECIPHER_SEND_REFERER=1. " +
+							"If omitted, returns every region/syndrome.",
 						),
 				},
 			},
@@ -56,106 +76,35 @@ export function registerSyndromes(server: McpServer, env: SyndromeEnv): void {
 						? String(args.syndrome_id).trim()
 						: undefined;
 
-					let path: string;
-					let label: string;
+					const fetched = access.sendReferer
+						? await fetchFromDecipher(syndromeId, access)
+						: await fetchFromClinGen(syndromeId);
 
-					if (syndromeId) {
-						path = `/data/syndrome/${encodeURIComponent(syndromeId)}`;
-						label = `syndrome ${syndromeId}`;
-					} else {
-						path = "/data/syndromes";
-						label = "all syndromes";
-					}
+					if ("error" in fetched) return fetched.error;
 
-					const response = await decipherFetch(path);
-
-					if (!response.ok) {
-						if (response.status === 404) {
-							return createCodeModeError(
-								"NOT_FOUND",
-								syndromeId
-									? `Syndrome ID '${syndromeId}' not found in DECIPHER. Use numeric IDs (e.g. 1=Wolf-Hirschhorn, 14=Prader-Willi Type 1).`
-									: "DECIPHER syndromes endpoint not found.",
-							);
-						}
-						const body = await response.text().catch(() => "");
-						return createCodeModeError(
-							"API_ERROR",
-							`DECIPHER API error: HTTP ${response.status}${body ? ` - ${body.slice(0, 200)}` : ""}`,
-						);
-					}
-
-					const data = await response.json();
+					const { data, stageData, source, textSummary, stageLabel } = fetched;
 					const responseBytes = JSON.stringify(data).length;
-
-					// For all syndromes, count them
-					let syndromeCount = 0;
-					let textSummary: string;
-
-					if (!syndromeId) {
-						// All syndromes: data is { content: { "1": {...}, "2": {...}, ... } }
-						const content =
-							data && typeof data === "object" && (data as Record<string, unknown>).content
-								? (data as Record<string, unknown>).content
-								: data;
-						if (content && typeof content === "object") {
-							syndromeCount = Object.keys(content).length;
-						}
-						textSummary = `DECIPHER: ${syndromeCount} syndromes returned (${Math.round(responseBytes / 1024)}KB)`;
-					} else {
-						// Single syndrome detail — unwrap .content wrapper
-						const detail = ((data as Record<string, unknown>)?.content ?? data) as Record<string, unknown>;
-						const syndromeName =
-							detail?.name || `Syndrome ${syndromeId}`;
-						const geneCount = Array.isArray(detail?.Genes)
-							? detail.Genes.length
-							: 0;
-						const phenoCount = Array.isArray(detail?.Phenotypes)
-							? detail.Phenotypes.length
-							: 0;
-						textSummary =
-							`DECIPHER syndrome ${syndromeId}: ${syndromeName}\n` +
-							`  Genes: ${geneCount}, Phenotypes: ${phenoCount}\n` +
-							`  Response size: ${Math.round(responseBytes / 1024)}KB`;
-					}
 
 					// Stage large responses
 					if (shouldStage(responseBytes) && env.DECIPHER_DATA_DO) {
 						const sessionId = (extra as Record<string, unknown>);
-
-						// Unwrap .content wrapper and flatten keyed objects into arrays
-						let stageData: unknown = (data as Record<string, unknown>)?.content ?? data;
-						if (
-							!syndromeId &&
-							stageData &&
-							typeof stageData === "object" &&
-							!Array.isArray(stageData)
-						) {
-							stageData = Object.values(stageData as Record<string, unknown>);
-						}
-
 						const stageResult = await stageToDoAndRespond(
 							stageData,
 							env.DECIPHER_DATA_DO,
-							syndromeId
-								? `decipher_syndrome_${syndromeId}`
-								: "decipher_syndromes",
+							stageLabel,
 							undefined,
 							{
 								toolName: name,
 								serverName: "decipher",
-								args: syndromeId
-									? { syndrome_id: syndromeId }
-									: {},
+								args: syndromeId ? { syndrome_id: syndromeId } : {},
 							},
 							"decipher",
 							sessionId,
 						);
 
 						const stagedResponse = {
-							...(syndromeId
-								? { syndrome_id: syndromeId }
-								: { syndrome_count: syndromeCount }),
+							...(syndromeId ? { syndrome_id: syndromeId } : {}),
+							source,
 							staged: true,
 							data_access_id: stageResult.dataAccessId,
 							schema: stageResult.schema,
@@ -173,6 +122,7 @@ export function registerSyndromes(server: McpServer, env: SyndromeEnv): void {
 							meta: {
 								staged: true,
 								data_access_id: stageResult.dataAccessId,
+								source,
 							},
 						});
 
@@ -187,7 +137,7 @@ export function registerSyndromes(server: McpServer, env: SyndromeEnv): void {
 					// Inline response
 					return createCodeModeResponse(data, {
 						textSummary,
-						meta: { fetched_at: new Date().toISOString() },
+						meta: { fetched_at: new Date().toISOString(), source },
 					});
 				} catch (err) {
 					const msg =
@@ -202,4 +152,155 @@ export function registerSyndromes(server: McpServer, env: SyndromeEnv): void {
 
 	register("decipher_syndromes");
 	register("mcp_decipher_syndromes");
+}
+
+type SyndromeFetch =
+	| {
+			data: unknown;
+			stageData: unknown;
+			source: Record<string, unknown>;
+			textSummary: string;
+			stageLabel: string;
+	  }
+	| { error: ReturnType<typeof createCodeModeError> };
+
+/** Match an ISCA ID exactly (bare digits are accepted), else a name substring. */
+function selectRegions(
+	regions: ClinGenRegion[],
+	query: string,
+): ClinGenRegion[] {
+	const wanted = /^\d+$/.test(query) ? `ISCA-${query}` : query;
+	const exact = regions.filter(
+		(r) => r.isca_id.toLowerCase() === wanted.toLowerCase(),
+	);
+	if (exact.length > 0) return exact;
+	const needle = query.toLowerCase();
+	return regions.filter((r) => r.name.toLowerCase().includes(needle));
+}
+
+/** Default path: ClinGen dosage-sensitivity region curation. */
+async function fetchFromClinGen(
+	syndromeId: string | undefined,
+): Promise<SyndromeFetch> {
+	const regions = await fetchClinGenRegions();
+	const source = {
+		id: "clingen-dosage",
+		name: "ClinGen dosage sensitivity — region curation (GRCh38)",
+		url: CLINGEN_REGION_TSV,
+		why:
+			"DECIPHER's own /data/syndromes endpoint enforces a same-origin Referer check; " +
+			"ClinGen publishes the equivalent recurrent-CNV regions openly.",
+	};
+
+	if (!syndromeId) {
+		return {
+			data: { region_count: regions.length, regions, source },
+			stageData: regions,
+			source,
+			textSummary:
+				`ClinGen dosage-sensitivity regions: ${regions.length} recurrent CNV regions (GRCh38)\n` +
+				"  Identify a region by its ISCA ID; each carries a haploinsufficiency and a " +
+				"triplosensitivity score (0-3 evidence levels, 30 = autosomal recessive, 40 = unlikely).",
+			stageLabel: "clingen_cnv_regions",
+		};
+	}
+
+	const matches = selectRegions(regions, syndromeId);
+	if (matches.length === 0) {
+		return {
+			error: createCodeModeError(
+				"NOT_FOUND",
+				`No ClinGen CNV region matches '${syndromeId}'. Use an ISCA ID (e.g. ISCA-46755) or a ` +
+					"name substring (e.g. '22q11.2', 'Williams'), or call this tool with no argument " +
+					"to list every region.",
+			),
+		};
+	}
+
+	const first = matches[0];
+	return {
+		data: { query: syndromeId, match_count: matches.length, regions: matches, source },
+		stageData: matches,
+		source,
+		textSummary:
+			`ClinGen CNV region match for '${syndromeId}': ${matches.length}\n` +
+			`  ${first.isca_id} ${first.name} — ${first.genomic_location} (${first.cytoband})\n` +
+			`  Haploinsufficiency: ${first.haploinsufficiency_score || "n/a"}, ` +
+			`triplosensitivity: ${first.triplosensitivity_score || "n/a"}`,
+		stageLabel: "clingen_cnv_regions",
+	};
+}
+
+/** Opt-in path: DECIPHER's own syndrome list/detail. */
+async function fetchFromDecipher(
+	syndromeId: string | undefined,
+	access: DecipherAccess,
+): Promise<SyndromeFetch> {
+	const path = syndromeId
+		? `/data/syndrome/${encodeURIComponent(syndromeId)}`
+		: "/data/syndromes";
+
+	const response = await decipherFetch(path, undefined, { access });
+
+	if (!response.ok) {
+		if (response.status === 404) {
+			return {
+				error: createCodeModeError(
+					"NOT_FOUND",
+					syndromeId
+						? `Syndrome ID '${syndromeId}' not found in DECIPHER. Use numeric IDs (e.g. 1=Wolf-Hirschhorn, 14=Prader-Willi Type 1).`
+						: "DECIPHER syndromes endpoint not found.",
+				),
+			};
+		}
+		const body = await response.text().catch(() => "");
+		return {
+			error: createCodeModeError(
+				"API_ERROR",
+				`DECIPHER API error: HTTP ${response.status}${body ? ` - ${body.slice(0, 200)}` : ""}`,
+			),
+		};
+	}
+
+	const data = (await response.json()) as Record<string, unknown>;
+	const responseBytes = JSON.stringify(data).length;
+	const source = {
+		id: "decipher",
+		name: "DECIPHER",
+		url: `https://www.deciphergenomics.org${path}`,
+		access: "DECIPHER_SEND_REFERER opt-in (same-origin Referer sent)",
+	};
+
+	if (!syndromeId) {
+		// All syndromes: data is { content: { "1": {...}, "2": {...}, ... } }
+		const content = (data.content ?? data) as Record<string, unknown>;
+		const syndromeCount =
+			content && typeof content === "object" ? Object.keys(content).length : 0;
+		return {
+			data,
+			stageData: Object.values(content),
+			source,
+			textSummary: `DECIPHER: ${syndromeCount} syndromes returned (${Math.round(responseBytes / 1024)}KB)`,
+			stageLabel: "decipher_syndromes",
+		};
+	}
+
+	// Single syndrome detail — unwrap .content wrapper
+	const detail = (data.content ?? data) as Record<string, unknown>;
+	const syndromeName = detail?.name || `Syndrome ${syndromeId}`;
+	const geneCount = Array.isArray(detail?.Genes) ? detail.Genes.length : 0;
+	const phenoCount = Array.isArray(detail?.Phenotypes)
+		? detail.Phenotypes.length
+		: 0;
+
+	return {
+		data,
+		stageData: detail,
+		source,
+		textSummary:
+			`DECIPHER syndrome ${syndromeId}: ${syndromeName}\n` +
+			`  Genes: ${geneCount}, Phenotypes: ${phenoCount}\n` +
+			`  Response size: ${Math.round(responseBytes / 1024)}KB`,
+		stageLabel: `decipher_syndrome_${syndromeId}`,
+	};
 }
