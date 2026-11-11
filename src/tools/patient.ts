@@ -1,3 +1,4 @@
+import { decipherResponse } from "../lib/tool-result";
 /**
  * decipher_patient — RETIRED. Returns NOT_SUPPORTED without contacting DECIPHER.
  *
@@ -75,7 +76,7 @@ export function registerPatient(server: McpServer): void {
 						.describe("Accepted but ignored — this tool no longer fetches patient data."),
 				},
 			},
-			async () =>
+			async (args, extra) => decipherResponse(async () =>
 				createCodeModeError("NOT_SUPPORTED", NOT_SUPPORTED_MESSAGE, {
 					robots_txt: "https://www.deciphergenomics.org/robots.txt",
 					terms_of_use: TERMS_URL,
@@ -85,7 +86,7 @@ export function registerPatient(server: McpServer): void {
 						"decipher_syndromes",
 						"decipher_gene_lookup",
 					],
-				}),
+				}), {}, name, extra, args),
 		);
 
 	register("decipher_patient");

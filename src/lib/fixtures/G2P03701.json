@@ -1,0 +1,164 @@
+{
+  "summary": "ATXN7L3-related developmental delay, hypotonia and facial dysmorphism has a confidence assertion of moderate based on 1 curated publication. This is a monoallelic autosomal condition. This is typically de novo. Variant consequence is altered gene product structure (inferred), decreased gene product level (evidence) and altered gene product level (evidence). Molecular mechanism is loss of function (evidenced by protein expression function and patient cells functional alteration). Recorded variant types include frameshift variant, stop gained and missense variant.",
+  "locus": {
+    "gene_symbol": "ATXN7L3",
+    "sequence": "17",
+    "start": 44191805,
+    "end": 44200113,
+    "strand": -1,
+    "reference": "grch38",
+    "ids": {
+      "HGNC": "HGNC:25416",
+      "Ensembl": "ENSG00000087152",
+      "OMIM": "619010"
+    },
+    "synonyms": [
+      "DKFZP761G2113"
+    ]
+  },
+  "stable_id": "G2P03701",
+  "genotype": "monoallelic_autosomal",
+  "variant_consequence": [
+    {
+      "variant_consequence": "altered gene product structure",
+      "accession": "SO:0002318",
+      "support": "inferred",
+      "publication": null
+    },
+    {
+      "variant_consequence": "decreased gene product level",
+      "accession": "SO:0002316",
+      "support": "evidence",
+      "publication": null
+    },
+    {
+      "variant_consequence": "altered gene product level",
+      "accession": "SO:0002314",
+      "support": "evidence",
+      "publication": null
+    }
+  ],
+  "molecular_mechanism": {
+    "mechanism": "loss of function",
+    "mechanism_support": "evidence",
+    "synopsis": [],
+    "evidence": {
+      "38753057": {
+        "functional_studies": {
+          "Function": [
+            "Protein Expression"
+          ],
+          "Functional Alteration": [
+            "Patient Cells"
+          ]
+        },
+        "descriptions": []
+      }
+    }
+  },
+  "disease": {
+    "id": 3656,
+    "name": "ATXN7L3-related developmental delay, hypotonia and facial dysmorphism",
+    "ontology_terms": [],
+    "synonyms": []
+  },
+  "confidence": "moderate",
+  "publications": [
+    {
+      "publication": {
+        "pmid": 38753057,
+        "title": "De novo variants in ATXN7L3 lead to developmental delay, hypotonia and distinctive facial features.",
+        "authors": "Harel T et al.",
+        "year": 2024
+      },
+      "number_of_families": 9,
+      "consanguinity": "unknown",
+      "affected_individuals": 9,
+      "ancestry": null,
+      "comments": []
+    }
+  ],
+  "mined_publications": [
+    {
+      "pmid": 41760364,
+      "year": 2026,
+      "title": "A Novel ATXN7L3 De Novo Variant Underlies Harel-Tora Neurodevelopmental Syndrome (HATONS) With Pre-Axial Polydactyly.",
+      "status": "mined",
+      "comment": null
+    },
+    {
+      "pmid": 38753057,
+      "year": 2024,
+      "title": "De novo variants in ATXN7L3 lead to developmental delay, hypotonia and distinctive facial features.",
+      "status": "curated",
+      "comment": null
+    }
+  ],
+  "panels": [
+    {
+      "name": "DD",
+      "description": "Developmental disorders"
+    }
+  ],
+  "cross_cutting_modifier": [
+    {
+      "term": "typically de novo"
+    }
+  ],
+  "variant_type": [
+    {
+      "term": "frameshift_variant",
+      "accession": "SO:0001589",
+      "inherited": false,
+      "de_novo": true,
+      "unknown_inheritance": false,
+      "publications": [
+        38753057
+      ],
+      "comments": []
+    },
+    {
+      "term": "stop_gained",
+      "accession": "SO:0001587",
+      "inherited": false,
+      "de_novo": true,
+      "unknown_inheritance": false,
+      "publications": [
+        38753057
+      ],
+      "comments": []
+    },
+    {
+      "term": "missense_variant",
+      "accession": "SO:0001583",
+      "inherited": false,
+      "de_novo": true,
+      "unknown_inheritance": false,
+      "publications": [
+        38753057
+      ],
+      "comments": []
+    }
+  ],
+  "variant_description": [
+    {
+      "description": "NM_001382309.1:c.340C>T p.(Arg114Ter)",
+      "publications": [
+        38753057
+      ]
+    }
+  ],
+  "phenotypes": [],
+  "phenotype_summary": [],
+  "last_updated": "2025-02-19",
+  "date_created": "2025-02-19",
+  "comments": [
+    {
+      "id": 508,
+      "text": "Five out of the 9 cases reported in PMID 38753057 have the same recurrent nonsense variant (NM_001382309.1:c.340C>T p.Arg114Ter) which has been shown to result in NMD.",
+      "date": "2025-02-19",
+      "is_public": 1
+    }
+  ],
+  "under_review": false
+}

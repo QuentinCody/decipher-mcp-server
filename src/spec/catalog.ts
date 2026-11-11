@@ -13,9 +13,9 @@
  *     403 {"detail":"Client key not provided"} until DECIPHER_CLIENT_KEY holds
  *     a Client API Key, which is requested from DECIPHER. How a key is granted
  *     is UNCONFIRMED from outside — see the note in ../lib/http.ts.
- *   - The DEFAULT data path is therefore /mirror/* — the same content as
- *     published openly, for programmatic use, by EBI Gene2Phenotype, ClinGen
- *     and NCBI dbVar. Keyless, and no origin is asserted.
+ *   - The DEFAULT data path is /mirror/* — related public datasets from EBI
+ *     Gene2Phenotype, ClinGen and NCBI dbVar. They are not interchangeable
+ *     with DECIPHER composite or patient records. No origin is asserted.
  *
  * ROBOTS.TXT (fetched live 2026-08-27) disallows /data/patient/, /patient/,
  * the per-gene "protein" and "phenotypes" sub-paths — and also /api/. The
@@ -41,26 +41,30 @@
  */
 
 import type { ApiCatalog } from "@bio-mcp/shared/codemode/catalog";
+import { g2pEvidenceEndpoints } from "./g2p";
 
 export const decipherCatalog: ApiCatalog = {
 	name: "DECIPHER (open mirrors + gated DECIPHER endpoints)",
 	baseUrl: "https://www.deciphergenomics.org",
 	version: "undocumented",
 	auth: "mirrors: none; /data/*: DECIPHER_SEND_REFERER opt-in; /api/*: DECIPHER_CLIENT_KEY",
-	endpointCount: 13,
+	endpointCount: 16,
 	notes:
 		"- DEFAULT PATH is /mirror/* — keyless, openly published, no origin assertion\n" +
 		"- /mirror/g2p/{path} proxies EBI Gene2Phenotype (https://www.ebi.ac.uk/gene2phenotype/api)\n" +
+		"- Gene summaries are not full LGMDE records: follow stable_id to /mirror/g2p/lgd/{stable_id}/ for mechanism evidence, synopsis, variant details and review dates.\n" +
+		"- Public alternatives are not DECIPHER patient-level data. Keep G2P, ClinGen and dbVar source identities separate when joining.\n" +
 		"- /mirror/clingen/regions returns ClinGen's parsed GRCh38 region curation list\n" +
 		"- /mirror/dbvar/nstd183/calls streams DECIPHER's consensus CNVs from NCBI dbVar and filters by region\n" +
 		"- /data/* returns 403 {\"error\":\"Access Denied\"} unless DECIPHER_SEND_REFERER=1 (same-origin Referer check)\n" +
 		"- /api/* returns 403 {\"detail\":\"Client key not provided\"} unless DECIPHER_CLIENT_KEY is set\n" +
 		"- /data/patient/* is REFUSED by this server with HTTP 451 (robots.txt + Terms of Use clause 5) — it is listed only so the refusal, not a bogus 404, reaches you\n" +
 		"- DECIPHER wraps its own /data/ responses in { content: { ... } }; the mirrors do not\n" +
-		"- All coordinates are GRCh38; DECIPHER syndrome variants may carry GRCh37 alternative_positions\n" +
+		"- ClinGen/dbVar routes select GRCh38; retain the G2P record's native reference assembly. DECIPHER syndrome variants may carry GRCh37 alternative_positions\n" +
 		"- Gene lookups use HGNC symbols (e.g. BRCA1, TP53); ClinGen regions use ISCA IDs (e.g. ISCA-46755)\n" +
 		"- dbVar allele columns arrive tagged (AC=9, AF=0.0106, AN=845) and are parsed to numbers here",
 	endpoints: [
+		...g2pEvidenceEndpoints,
 		// === Open mirrors (default path) ===
 		{
 			method: "GET",
@@ -85,7 +89,7 @@ export const decipherCatalog: ApiCatalog = {
 			path: "/mirror/g2p/gene/{symbol}/summary/",
 			summary:
 				"EBI Gene2Phenotype curated disease records for a gene — the openly-published " +
-				"equivalent of DECIPHER's G2PAssociations block. Each record carries disease, " +
+				"source also used by DECIPHER. Summaries carry disease, " +
 				"genotype (monoallelic/biallelic), confidence (definitive/strong/moderate/limited), " +
 				"molecular_mechanism, variant_consequence, panels and stable_id (G2P00119).",
 			category: "gene",
@@ -106,17 +110,17 @@ export const decipherCatalog: ApiCatalog = {
 			method: "GET",
 			path: "/mirror/g2p/search/",
 			summary:
-				"Search Gene2Phenotype records. Query params: type (gene|disease|panel), " +
-				"query (the term). Returns { count, results: [{ stable_id, gene, genotype, " +
+				"Search Gene2Phenotype records by gene, disease, phenotype or stable ID; optional panel filter and page. " +
+				"Retain count, next and previous: one page is not a complete search. Returns { count, results: [{ stable_id, gene, genotype, " +
 				"disease, mechanism, panel, confidence }] }.",
 			category: "gene",
 			queryParams: [
 				{
 					name: "type",
 					type: "string",
-					required: true,
-					description: "gene | disease | panel",
-					enum: ["gene", "disease", "panel"],
+					required: false,
+					description: "Omit for generic search; panel is a separate filter",
+					enum: ["gene", "disease", "phenotype", "stable_id"],
 				},
 				{
 					name: "query",
@@ -124,6 +128,8 @@ export const decipherCatalog: ApiCatalog = {
 					required: true,
 					description: "Search term (e.g. ARID1B)",
 				},
+				{ name: "panel", type: "string", required: false, description: "Exact panel name from /mirror/g2p/panels/ (e.g. DD)" },
+				{ name: "page", type: "number", required: false, description: "1-based result page; preserve native next/previous/count" },
 			],
 			example:
 				"return await api.get('/mirror/g2p/search/', { type: 'gene', query: 'ARID1B' });",
@@ -141,10 +147,10 @@ export const decipherCatalog: ApiCatalog = {
 			method: "GET",
 			path: "/mirror/clingen/regions",
 			summary:
-				"ClinGen dosage-sensitivity region curation (GRCh38), parsed: ~513 recurrent " +
+				"ClinGen dosage-sensitivity region curation (GRCh38), parsed with the complete native TSV: " +
 				"CNV regions with isca_id, name, cytoband, chr/start/end, haploinsufficiency and " +
-				"triplosensitivity score + description + PMIDs, date_last_evaluated. This is the " +
-				"open equivalent of DECIPHER's CNV-syndrome coordinates.",
+				"triplosensitivity score + description + PMIDs, disease IDs and date_last_evaluated. This is the " +
+				"independent ClinGen curation, not DECIPHER's syndrome catalog or patient data.",
 			category: "syndrome",
 			featured: true,
 			coveredByTool: "decipher_syndromes",
@@ -158,9 +164,9 @@ export const decipherCatalog: ApiCatalog = {
 			path: "/mirror/dbvar/nstd183/calls",
 			summary:
 				"Population CNV frequency from NCBI dbVar nstd183 'DECIPHER Consensus CNVs' " +
-				"(GRCh38, ~67k calls), filtered to a region. Each call carries accession, type, " +
+				"(GRCh38.p12 remap of the February 2020 control-set submission), filtered to a region. Placement rows are not distinct variants or people. Each row carries accession, type, " +
 				"coordinates, and allele_count / allele_frequency / allele_number. The study file " +
-				"is streamed and filtered per call, so always pass a region.",
+				"is bounded, scanned and filtered per call; all native columns and the gzip hash are retained. Primary chromosome coordinates only unless contig is specified.",
 			category: "cnv",
 			featured: true,
 			coveredByTool: "decipher_cnv_frequency",
@@ -171,6 +177,7 @@ export const decipherCatalog: ApiCatalog = {
 					required: true,
 					description: "Chromosome without prefix (e.g. '22')",
 				},
+				{ name: "contig", type: "string", required: false, description: "Exact alternate contig accession; omission selects primary chromosome placements only" },
 				{
 					name: "start",
 					type: "number",

@@ -1,3 +1,4 @@
+import { decipherResponse } from "../lib/tool-result";
 /**
  * decipher_syndromes — recurrent CNV syndrome regions with genomic coordinates.
  *
@@ -19,16 +20,13 @@ import { type DecipherAccess, decipherFetch } from "../lib/http";
 import {
 	CLINGEN_REGION_TSV,
 	type ClinGenRegion,
-	fetchClinGenRegions,
+	fetchClinGenRegionEvidence,
 } from "../lib/mirrors";
 import {
 	createCodeModeResponse,
 	createCodeModeError,
 } from "@bio-mcp/shared/codemode/response";
-import {
-	shouldStage,
-	stageToDoAndRespond,
-} from "@bio-mcp/shared/staging/utils";
+
 
 interface SyndromeEnv {
 	DECIPHER_DATA_DO: DurableObjectNamespace;
@@ -70,84 +68,12 @@ export function registerSyndromes(
 						),
 				},
 			},
-			async (args, extra) => {
-				try {
-					const syndromeId = args.syndrome_id
-						? String(args.syndrome_id).trim()
-						: undefined;
-
-					const fetched = access.sendReferer
-						? await fetchFromDecipher(syndromeId, access)
-						: await fetchFromClinGen(syndromeId);
-
-					if ("error" in fetched) return fetched.error;
-
-					const { data, stageData, source, textSummary, stageLabel } = fetched;
-					const responseBytes = JSON.stringify(data).length;
-
-					// Stage large responses
-					if (shouldStage(responseBytes) && env.DECIPHER_DATA_DO) {
-						const sessionId = (extra as Record<string, unknown>);
-						const stageResult = await stageToDoAndRespond(
-							stageData,
-							env.DECIPHER_DATA_DO,
-							stageLabel,
-							undefined,
-							{
-								toolName: name,
-								serverName: "decipher",
-								args: syndromeId ? { syndrome_id: syndromeId } : {},
-							},
-							"decipher",
-							sessionId,
-						);
-
-						const stagedResponse = {
-							...(syndromeId ? { syndrome_id: syndromeId } : {}),
-							source,
-							staged: true,
-							data_access_id: stageResult.dataAccessId,
-							schema: stageResult.schema,
-							tables_created: stageResult.tablesCreated,
-							total_rows: stageResult.totalRows,
-							message:
-								`Response staged (${Math.round(responseBytes / 1024)}KB). ` +
-								`Use 'decipher_query_data' with data_access_id '${stageResult.dataAccessId}' to query with SQL.`,
-						};
-
-						const result = createCodeModeResponse(stagedResponse, {
-							textSummary:
-								textSummary +
-								`\nData staged as ${stageResult.dataAccessId}.`,
-							meta: {
-								staged: true,
-								data_access_id: stageResult.dataAccessId,
-								source,
-							},
-						});
-
-						if (result.structuredContent) {
-							(result.structuredContent as Record<string, unknown>)._staging =
-								stageResult._staging;
-						}
-
-						return result;
-					}
-
-					// Inline response
-					return createCodeModeResponse(data, {
-						textSummary,
-						meta: { fetched_at: new Date().toISOString(), source },
-					});
-				} catch (err) {
-					const msg =
-						err instanceof Error ? err.message : String(err);
-					return createCodeModeError(
-						"API_ERROR",
-						`decipher_syndromes failed: ${msg}`,
-					);
-				}
-			},
+      async (args, extra) => decipherResponse(async () => {
+        const syndromeId = args.syndrome_id ? String(args.syndrome_id).trim() : undefined;
+        const fetched = access.sendReferer ? await fetchFromDecipher(syndromeId, access) : await fetchFromClinGen(syndromeId);
+        if ("error" in fetched) return fetched.error;
+        return createCodeModeResponse(fetched.data, { textSummary: fetched.textSummary, meta: { source: fetched.source } });
+      }, env, name, extra, args),
 		);
 
 	register("decipher_syndromes");
@@ -182,19 +108,20 @@ function selectRegions(
 async function fetchFromClinGen(
 	syndromeId: string | undefined,
 ): Promise<SyndromeFetch> {
-	const regions = await fetchClinGenRegions();
+	const evidence = await fetchClinGenRegionEvidence();
+	const regions = evidence.regions;
 	const source = {
 		id: "clingen-dosage",
 		name: "ClinGen dosage sensitivity — region curation (GRCh38)",
 		url: CLINGEN_REGION_TSV,
 		why:
 			"DECIPHER's own /data/syndromes endpoint enforces a same-origin Referer check; " +
-			"ClinGen publishes the equivalent recurrent-CNV regions openly.",
+			"ClinGen publishes its independently curated dosage regions openly.",
 	};
 
 	if (!syndromeId) {
 		return {
-			data: { region_count: regions.length, regions, source },
+			data: { ...evidence, source },
 			stageData: regions,
 			source,
 			textSummary:
@@ -213,13 +140,14 @@ async function fetchFromClinGen(
 				`No ClinGen CNV region matches '${syndromeId}'. Use an ISCA ID (e.g. ISCA-46755) or a ` +
 					"name substring (e.g. '22q11.2', 'Williams'), or call this tool with no argument " +
 					"to list every region.",
+        { query: syndromeId, match_count: 0, source, native_tsv: evidence.native_tsv, response_evidence: evidence.response_evidence, region_count: evidence.region_count },
 			),
 		};
 	}
 
 	const first = matches[0];
 	return {
-		data: { query: syndromeId, match_count: matches.length, regions: matches, source },
+		data: { ...evidence, query: syndromeId, match_count: matches.length, regions: matches, source },
 		stageData: matches,
 		source,
 		textSummary:

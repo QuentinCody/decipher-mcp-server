@@ -25,9 +25,9 @@
  */
 
 import type { ApiFetchFn } from "@bio-mcp/shared/codemode/catalog";
-import { restFetch } from "@bio-mcp/shared/http/rest-fetch";
+import { mirrorJson } from "./mirror-http";
 import { type DecipherAccess, decipherFetch, decipherPost } from "./http";
-import { G2P_BASE, fetchClinGenRegions, fetchDbVarCnvCalls } from "./mirrors";
+import { G2P_BASE, fetchClinGenRegionEvidence, fetchDbVarCnvCalls } from "./mirrors";
 
 const ROUTES =
 	"/mirror/g2p/{path}, /mirror/clingen/regions, /mirror/dbvar/nstd183/calls, " +
@@ -58,6 +58,7 @@ function requireNumber(
 
 export function createDecipherApiFetch(access: DecipherAccess): ApiFetchFn {
 	return async (request) => {
+		if (request.method !== "GET" || request.body !== undefined) httpError(405, "DECIPHER catalog routes require bodyless GET requests");
 		const path = request.path.startsWith("/") ? request.path : `/${request.path}`;
 
 		if (path.startsWith("/data/patient")) {
@@ -90,36 +91,18 @@ async function fetchMirror(
 ): Promise<{ status: number; data: unknown }> {
 	if (path.startsWith("/mirror/g2p/")) {
 		const upstreamPath = path.slice("/mirror/g2p".length);
-		const response = await restFetch(G2P_BASE, upstreamPath, params, {
-			timeout: 15_000,
-			deadlineMs: 30_000,
-		});
-		const body = await response.text();
-		if (!response.ok) {
-			httpError(
-				response.status,
-				`Gene2Phenotype HTTP ${response.status}: ${body.slice(0, 200)}`,
-				body,
-			);
-		}
-		try {
-			return { status: response.status, data: JSON.parse(body) };
-		} catch {
-			return { status: response.status, data: body };
-		}
+    const result = await mirrorJson(G2P_BASE + upstreamPath, params);
+    return { status: result.status, data: result.data };
 	}
 
 	if (path === "/mirror/clingen/regions") {
-		const regions = await fetchClinGenRegions();
-		return {
-			status: 200,
-			data: { region_count: regions.length, regions },
-		};
+		return { status: 200, data: await fetchClinGenRegionEvidence() };
 	}
 
 	if (path === "/mirror/dbvar/nstd183/calls") {
 		const result = await fetchDbVarCnvCalls({
 			chr: String(params?.chr ?? "").replace(/^chr/i, ""),
+			contig: params?.contig === undefined ? undefined : String(params.contig),
 			start: requireNumber(params, "start"),
 			end: requireNumber(params, "end"),
 			variantType: params?.variant_type

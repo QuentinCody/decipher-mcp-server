@@ -28,6 +28,8 @@ export function buildG2pGeneView(symbol: string, gene: G2pGeneRecord): G2pGeneVi
 		id: "ebi-gene2phenotype",
 		name: "EBI Gene2Phenotype (G2P)",
 		url: `${G2P_BASE}/gene/${encodeURIComponent(symbol)}/`,
+		records_url: `${G2P_BASE}/gene/${encodeURIComponent(symbol)}/summary/`,
+		record_scope: "G2P gene-level curation summaries; not DECIPHER patient data",
 		why: REFERER_HINT,
 	};
 
@@ -42,6 +44,8 @@ export function buildG2pGeneView(symbol: string, gene: G2pGeneRecord): G2pGeneVi
 
 	const geneData: Record<string, unknown> = {
 		gene_symbol: gene.gene_symbol,
+		native: gene.native,
+		response_evidence: gene.response_evidence,
 		location: gene.location,
 		ids: gene.ids,
 		synonyms: gene.synonyms,
@@ -49,6 +53,7 @@ export function buildG2pGeneView(symbol: string, gene: G2pGeneRecord): G2pGeneVi
 		g2p_records: recordsUnavailable ? null : gene.records,
 		record_count: recordsUnavailable ? null : gene.records.length,
 		g2p_records_unavailable: recordsUnavailable,
+		g2p_record_details: "Follow each stable_id with /mirror/g2p/lgd/{stable_id}/ for full mechanism evidence and review context; a summary is not a full LGMDE record.",
 		...(recordsErrorText
 			? {
 					g2p_records_error: recordsErrorText,

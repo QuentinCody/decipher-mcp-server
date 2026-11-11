@@ -1,0 +1,320 @@
+{
+  "summary": "MTFMT-related mitochondrial disease with regression and lactic acidosis has a confidence assertion of definitive based on 5 curated publications. This is a biallelic autosomal condition. Variant consequence is absent gene product (inferred) and altered gene product structure (inferred). Molecular mechanism is loss of function (evidenced by biochemical function, protein expression function, patient cells functional alteration and patient cells rescue). Recorded variant types include splice region variant, frameshift variant, stop gained and missense variant.",
+  "locus": {
+    "gene_symbol": "MTFMT",
+    "sequence": "15",
+    "start": 65001512,
+    "end": 65029639,
+    "strand": -1,
+    "reference": "grch38",
+    "ids": {
+      "HGNC": "HGNC:29666",
+      "Ensembl": "ENSG00000103707",
+      "OMIM": "611766"
+    },
+    "synonyms": [
+      "FMT1"
+    ]
+  },
+  "stable_id": "G2P03507",
+  "genotype": "biallelic_autosomal",
+  "variant_consequence": [
+    {
+      "variant_consequence": "absent gene product",
+      "accession": "SO:0002317",
+      "support": "inferred",
+      "publication": null
+    },
+    {
+      "variant_consequence": "altered gene product structure",
+      "accession": "SO:0002318",
+      "support": "inferred",
+      "publication": null
+    }
+  ],
+  "molecular_mechanism": {
+    "mechanism": "loss of function",
+    "mechanism_support": "evidence",
+    "synopsis": [],
+    "evidence": {
+      "30911575": {
+        "functional_studies": {
+          "Function": [
+            "Biochemical",
+            "Protein Expression"
+          ],
+          "Functional Alteration": [
+            "Patient Cells"
+          ]
+        },
+        "descriptions": []
+      },
+      "21907147": {
+        "functional_studies": {
+          "Function": [
+            "Biochemical"
+          ],
+          "Functional Alteration": [
+            "Patient Cells"
+          ],
+          "Rescue": [
+            "Patient Cells"
+          ]
+        },
+        "descriptions": []
+      },
+      "24461907": {
+        "functional_studies": {
+          "Function": [
+            "Biochemical",
+            "Protein Expression"
+          ]
+        },
+        "descriptions": []
+      },
+      "23499752": {
+        "functional_studies": {
+          "Function": [
+            "Protein Expression"
+          ],
+          "Functional Alteration": [
+            "Patient Cells"
+          ]
+        },
+        "descriptions": []
+      }
+    }
+  },
+  "disease": {
+    "id": 2231,
+    "name": "MTFMT-related mitochondrial disease with regression and lactic acidosis",
+    "ontology_terms": [
+      {
+        "accession": "MONDO:0013987",
+        "term": "combined oxidative phosphorylation defect type 15",
+        "description": "combined oxidative phosphorylation defect type 15",
+        "source": "Mondo"
+      },
+      {
+        "accession": "614947",
+        "term": "COMBINED OXIDATIVE PHOSPHORYLATION DEFICIENCY 15",
+        "description": "COMBINED OXIDATIVE PHOSPHORYLATION DEFICIENCY 15",
+        "source": "OMIM"
+      }
+    ],
+    "synonyms": []
+  },
+  "confidence": "definitive",
+  "publications": [
+    {
+      "publication": {
+        "pmid": 30911575,
+        "title": "Leigh syndrome caused by mutations in MTFMT is associated with a better prognosis.",
+        "authors": "Hayhurst H et al.",
+        "year": 2019
+      },
+      "number_of_families": null,
+      "consanguinity": null,
+      "affected_individuals": null,
+      "ancestry": null,
+      "comments": []
+    },
+    {
+      "publication": {
+        "pmid": 21907147,
+        "title": "Mutations in MTFMT underlie a human disorder of formylation causing impaired mitochondrial translation.",
+        "authors": "Tucker EJ, Hershman SG, Köhrer C, Belcher-Timme CA, Patel J, Goldberger OA, Christodoulou J, Silberstein JM, McKenzie M, Ryan MT, Compton AG, Jaffe JD, Carr SA, Calvo SE, RajBhandary UL, Thorburn DR, Mootha VK.",
+        "year": 2011
+      },
+      "number_of_families": null,
+      "consanguinity": null,
+      "affected_individuals": null,
+      "ancestry": null,
+      "comments": []
+    },
+    {
+      "publication": {
+        "pmid": 24461907,
+        "title": "Phenotypic spectrum of eleven patients and five novel MTFMT mutations identified by exome sequencing and candidate gene screening.",
+        "authors": "Haack TB et al.",
+        "year": 2014
+      },
+      "number_of_families": null,
+      "consanguinity": null,
+      "affected_individuals": null,
+      "ancestry": null,
+      "comments": []
+    },
+    {
+      "publication": {
+        "pmid": 32133637,
+        "title": "First report of childhood progressive cerebellar atrophy due to compound heterozygous MTFMT variants.",
+        "authors": "Bai R, Haude K, Yang E, Goldstein A, Anselm I.",
+        "year": 2020
+      },
+      "number_of_families": null,
+      "consanguinity": null,
+      "affected_individuals": null,
+      "ancestry": null,
+      "comments": []
+    },
+    {
+      "publication": {
+        "pmid": 23499752,
+        "title": "Clinical and functional characterisation of the combined respiratory chain defect in two sisters due to autosomal recessive mutations in MTFMT.",
+        "authors": "Neeve VC, Pyle A, Boczonadi V, Gomez-Duran A, Griffin H, Santibanez-Koref M, Gaiser U, Bauer P, Tzschach A, Chinnery PF, Horvath R.",
+        "year": 2013
+      },
+      "number_of_families": null,
+      "consanguinity": null,
+      "affected_individuals": null,
+      "ancestry": null,
+      "comments": []
+    }
+  ],
+  "mined_publications": [
+    {
+      "pmid": 37476321,
+      "year": 2023,
+      "title": "MTFMT-Related Leigh Syndrome Phenotypically Manifesting with Mobile Dystonia and Hypoacusis.",
+      "status": "mined",
+      "comment": null
+    },
+    {
+      "pmid": 36873085,
+      "year": 2023,
+      "title": "Autonomic instability, arrhythmia and visual impairment in a new presentation of MTFMT-related mitochondrial disease.",
+      "status": "mined",
+      "comment": null
+    },
+    {
+      "pmid": 36704074,
+      "year": 2023,
+      "title": "Nonprogressive Mobile Dystonia in MTFMT-Related Mitochondrial Disease.",
+      "status": "mined",
+      "comment": null
+    },
+    {
+      "pmid": 32577402,
+      "year": 2020,
+      "title": "Improved lactate control with dichloroacetate in a case with severe neonatal lactic acidosis due to MTFMT mitochondrial translation disorder.",
+      "status": "mined",
+      "comment": null
+    },
+    {
+      "pmid": 32133637,
+      "year": 2020,
+      "title": "First report of childhood progressive cerebellar atrophy due to compound heterozygous MTFMT variants.",
+      "status": "curated",
+      "comment": null
+    },
+    {
+      "pmid": 30911575,
+      "year": 2019,
+      "title": "Leigh syndrome caused by mutations in MTFMT is associated with a better prognosis.",
+      "status": "curated",
+      "comment": null
+    },
+    {
+      "pmid": 30569017,
+      "year": 2018,
+      "title": "Leigh syndrome followed by parkinsonism in an adult with homozygous c.626C>T mutation in MTFMT.",
+      "status": "mined",
+      "comment": null
+    },
+    {
+      "pmid": 28058511,
+      "year": 2017,
+      "title": "Identification and functional characterization of a novel MTFMT mutation associated with selective vulnerability of the visual pathway and a mild neurological phenotype.",
+      "status": "mined",
+      "comment": null
+    },
+    {
+      "pmid": 27393152,
+      "year": 2016,
+      "title": "Challenges managing end-stage renal disease and kidney transplantation in a child with MTFMT mutation and moyamoya disease.",
+      "status": "mined",
+      "comment": null
+    },
+    {
+      "pmid": 26060307,
+      "year": 2016,
+      "title": "Methionyl-tRNA Formyltransferase (MTFMT) Deficiency Mimicking Acquired Demyelinating Disease.",
+      "status": "mined",
+      "comment": null
+    },
+    {
+      "pmid": 24461907,
+      "year": 2014,
+      "title": "Phenotypic spectrum of eleven patients and five novel MTFMT mutations identified by exome sequencing and candidate gene screening.",
+      "status": "curated",
+      "comment": null
+    },
+    {
+      "pmid": 23499752,
+      "year": 2013,
+      "title": "Clinical and functional characterisation of the combined respiratory chain defect in two sisters due to autosomal recessive mutations in MTFMT.",
+      "status": "curated",
+      "comment": null
+    },
+    {
+      "pmid": 21907147,
+      "year": 2011,
+      "title": "Mutations in MTFMT underlie a human disorder of formylation causing impaired mitochondrial translation.",
+      "status": "curated",
+      "comment": null
+    }
+  ],
+  "panels": [
+    {
+      "name": "DD",
+      "description": "Developmental disorders"
+    }
+  ],
+  "cross_cutting_modifier": [],
+  "variant_type": [
+    {
+      "term": "splice_region_variant",
+      "accession": "SO:0001630",
+      "inherited": false,
+      "de_novo": false,
+      "unknown_inheritance": false,
+      "publications": [],
+      "comments": []
+    },
+    {
+      "term": "frameshift_variant",
+      "accession": "SO:0001589",
+      "inherited": false,
+      "de_novo": false,
+      "unknown_inheritance": false,
+      "publications": [],
+      "comments": []
+    },
+    {
+      "term": "stop_gained",
+      "accession": "SO:0001587",
+      "inherited": false,
+      "de_novo": false,
+      "unknown_inheritance": false,
+      "publications": [],
+      "comments": []
+    },
+    {
+      "term": "missense_variant",
+      "accession": "SO:0001583",
+      "inherited": false,
+      "de_novo": false,
+      "unknown_inheritance": false,
+      "publications": [],
+      "comments": []
+    }
+  ],
+  "variant_description": [],
+  "phenotypes": [],
+  "phenotype_summary": [],
+  "last_updated": "2025-03-06",
+  "date_created": "2024-03-06",
+  "comments": [],
+  "under_review": false
+}

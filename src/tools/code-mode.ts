@@ -1,3 +1,4 @@
+import { decipherResponse } from "../lib/tool-result";
 /**
  * DECIPHER Code Mode — registers search + execute tools for full API access.
  *
@@ -29,13 +30,21 @@ export function registerCodeMode(
 	access: DecipherAccess,
 ): void {
 	const apiFetch = createDecipherApiFetch(access);
+	const registrar = { tool: (...args: unknown[]) => {
+		const [name, ...rest] = args;
+		// SAFETY: shared factories supply SDK arguments; only the alias changes.
+		const register = server.tool.bind(server) as (...values: unknown[]) => void;
+		const handler = rest.pop() as (input: unknown, extra: unknown) => ReturnType<typeof decipherResponse>;
+    const respond = (input: unknown, extra: unknown) => decipherResponse(() => handler(input, extra), env, String(name), extra, input);
+    register(name, ...rest, respond); register(`mcp_${String(name)}`, ...rest, respond);
+	} };
 
 	// Register the search tool (in-process, no isolate)
 	const searchTool = createSearchTool({
 		prefix: "decipher",
 		catalog: decipherCatalog,
 	});
-	searchTool.register(server as unknown as { tool: (...args: unknown[]) => void });
+	searchTool.register(registrar);
 
 	// Register the execute tool (V8 isolate via DynamicWorkerExecutor)
 	const executeTool = createExecuteTool({
@@ -53,8 +62,12 @@ export function registerCodeMode(
 		},
 		catalog: decipherCatalog,
 		apiFetch,
+		preserveApiErrors: true,
 		doNamespace: env.DECIPHER_DATA_DO,
 		loader: env.CODE_MODE_LOADER,
+		maxInlineBytes: 30 * 1024,
+		stagingThreshold: 30 * 1024,
+		timeout: 60000,
 	});
-	executeTool.register(server as unknown as { tool: (...args: unknown[]) => void });
+	executeTool.register(registrar);
 }

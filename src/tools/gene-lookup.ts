@@ -1,3 +1,4 @@
+import { decipherResponse } from "../lib/tool-result";
 /**
  * decipher_gene_lookup — gene-level rare-disease evidence for one HGNC symbol.
  *
@@ -21,7 +22,6 @@ import { buildG2pGeneView } from "../lib/g2p-view";
 import { type DecipherAccess, decipherFetch } from "../lib/http";
 import { fetchG2pGene } from "../lib/mirrors";
 import { createCodeModeResponse, createCodeModeError } from "@bio-mcp/shared/codemode/response";
-import { shouldStage, stageToDoAndRespond } from "@bio-mcp/shared/staging/utils";
 
 interface GeneEnv {
 	DECIPHER_DATA_DO: DurableObjectNamespace;
@@ -53,7 +53,6 @@ export function registerGeneLookup(server: McpServer, env: GeneEnv, access: Deci
 						.describe("HGNC gene symbol (e.g. BRCA1, TP53, BRAF, SHANK3)"),
 					include_g2p: z
 						.boolean()
-						.default(false)
 						.optional()
 						.describe(
 							"DECIPHER path only: also fetch /data/gene/{symbol}/g2p and merge it. " +
@@ -62,83 +61,15 @@ export function registerGeneLookup(server: McpServer, env: GeneEnv, access: Deci
 						),
 				},
 			},
-			async (args, extra) => {
-				try {
-					const symbol = String(args.symbol).trim().toUpperCase();
-					if (!symbol) {
-						return createCodeModeError(
-							"INVALID_ARGUMENTS",
-							"Gene symbol is required (e.g. BRCA1, TP53)",
-						);
-					}
-
-					const fetched = access.sendReferer
-						? await fetchFromDecipher(symbol, Boolean(args.include_g2p), access)
-						: await fetchFromGene2Phenotype(symbol);
-
-					if ("error" in fetched) return fetched.error;
-
-					const { geneData, source, textSummary } = fetched;
-					const responseBytes = JSON.stringify(geneData).length;
-
-					// Stage large responses
-					if (shouldStage(responseBytes) && env.DECIPHER_DATA_DO) {
-						const sessionId = extra as Record<string, unknown>;
-						const stageResult = await stageToDoAndRespond(
-							geneData,
-							env.DECIPHER_DATA_DO,
-							"decipher_gene",
-							undefined,
-							{
-								toolName: name,
-								serverName: "decipher",
-								args: { symbol },
-							},
-							"decipher",
-							sessionId,
-						);
-
-						const stagedResponse = {
-							symbol,
-							source,
-							staged: true,
-							data_access_id: stageResult.dataAccessId,
-							schema: stageResult.schema,
-							tables_created: stageResult.tablesCreated,
-							total_rows: stageResult.totalRows,
-							message:
-								`Response staged (${Math.round(responseBytes / 1024)}KB). ` +
-								`Use 'decipher_query_data' with data_access_id '${stageResult.dataAccessId}' to query with SQL.`,
-						};
-
-						const result = createCodeModeResponse(stagedResponse, {
-							textSummary:
-								textSummary + `\nData staged as ${stageResult.dataAccessId}.`,
-							meta: {
-								staged: true,
-								data_access_id: stageResult.dataAccessId,
-								source,
-							},
-						});
-
-						if (result.structuredContent) {
-							(result.structuredContent as Record<string, unknown>)._staging =
-								stageResult._staging;
-						}
-
-						return result;
-					}
-
-					// Inline response
-					return createCodeModeResponse(geneData, {
-						textSummary,
-						meta: { fetched_at: new Date().toISOString(), source },
-					});
-				} catch (err) {
-					const msg = err instanceof Error ? err.message : String(err);
-					return createCodeModeError("API_ERROR", `decipher_gene_lookup failed: ${msg}`);
-				}
-			},
+      async (args, extra) => decipherResponse(async () => {
+        const symbol = String(args.symbol).trim().toUpperCase();
+        if (!symbol || symbol.length > 100 || !/^[A-Z0-9][A-Z0-9_.-]*$/.test(symbol)) return createCodeModeError("INVALID_ARGUMENTS", "Use a valid HGNC symbol");
+        const fetched = access.sendReferer
+          ? await fetchFromDecipher(symbol, Boolean(args.include_g2p), access)
+          : await fetchFromGene2Phenotype(symbol);
+        if ("error" in fetched) return fetched.error;
+        return createCodeModeResponse(fetched.geneData, { textSummary: fetched.textSummary, meta: { source: fetched.source } });
+      }, env, name, extra, args),
 		);
 
 	register("decipher_gene_lookup");
@@ -163,7 +94,8 @@ async function fetchFromGene2Phenotype(symbol: string): Promise<GeneFetch> {
 				error: createCodeModeError(
 					"NOT_FOUND",
 					`Gene '${symbol}' has no Gene2Phenotype record. Ensure you are using a valid HGNC symbol (e.g. BRCA1, TP53, BRAF). ` +
-						"Note: G2P curates rare-disease genes, so a valid symbol with no curated disease record also returns 404.",
+						"An upstream 404 does not establish absence of disease evidence elsewhere.",
+          result.evidence,
 				),
 			};
 		}
@@ -171,6 +103,7 @@ async function fetchFromGene2Phenotype(symbol: string): Promise<GeneFetch> {
 			error: createCodeModeError(
 				"API_ERROR",
 				`Gene2Phenotype error: HTTP ${result.status}${result.error ? ` - ${result.error}` : ""}`,
+        result.evidence,
 			),
 		};
 	}
