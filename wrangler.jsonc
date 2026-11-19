@@ -1,5 +1,6 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
+	"services": [{ "binding": "FEEDBACK_INBOX", "service": "mcp-client-bio", "entrypoint": "FeedbackInbox" }],
 	"name": "decipher-mcp-server",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-03-10",
@@ -59,6 +60,7 @@
 	// DECIPHER issues a Client API Key only under a signed API Agreement
 	// (https://www.deciphergenomics.org/api-docs, contact@deciphergenomics.org).
 	"vars": {
+	  "MCP_FEEDBACK_SOURCE": "decipher",
 		"DECIPHER_SEND_REFERER": "0"
 	},
 	"worker_loaders": [
